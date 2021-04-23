@@ -16,20 +16,13 @@ go client.Connect(done, ready, "ws://localhost:8080")
 <-ready
 
 // ready to send messages to websocket channel
-go func() {
-	for i := 0; i < 50000; i++ {
-		if err := client.SendText([]byte(fmt.Sprint("message: ", i))); err != nil {
-			logrus.Fatal("failed to send message: ", err)
-		}
-	}
-}()
+for i := 0; i < 10000; i++ {
+    if err := client.SendText([]byte(fmt.Sprint("message: ", i))); err != nil {
+        logrus.Fatal("failed to send message: ", err)
+    }
+}
 
-// go func() {
-// 	select {
-// 	case <-time.After(2 * time.Second):
-// 		close(done)
-// 	}
-// }()
+close(done)
 
 <-done
 ```
@@ -55,17 +48,17 @@ go server.Run(done)
 ### Handler example
 ```
 // mHandler example impl
-type mHandler struct{}
+type mHandler struct{
+	counter int
+}
 
 func (h *mHandler) OnMessage(in []byte, reply func(int, []byte) error) {
-	// handle message from ws channel
-	logrus.Info("received: " + string(in))
-
-	reply(ws.TextMessage, []byte("reply from server: "+string(in)))
+	h.counter++
 }
 
 func (h *mHandler) OnError(err error) {
 	// handle error from ws channel
 	logrus.Error("error from ws connection: ", err)
+	logrus.Info("received total: ", h.counter)
 }
 ```
