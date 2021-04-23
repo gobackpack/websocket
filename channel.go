@@ -46,8 +46,6 @@ func (ch *Channel) read() {
 		logrus.Warn("websocket connection closed")
 	}()
 
-	logrus.Info("listening for messages")
-
 	for {
 		_, msg, err := ch.readMessage()
 
