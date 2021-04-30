@@ -129,7 +129,7 @@ func (hub *Hub) ReadMessages(conn *websocketLib.Conn) {
 		_, msg, err := hub.readMessage(conn)
 
 		if err != nil {
-			logrus.Error("failed to read message from websocket: ", err)
+			logrus.Error("error message from websocket: ", err)
 			break
 		}
 
