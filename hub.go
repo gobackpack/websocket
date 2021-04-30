@@ -58,26 +58,26 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 
 		for {
 			select {
-			case gr := <-hub.Connect:
-				hub.Clients[gr.ConnectionId] = gr.Connection
+			case client := <-hub.Connect:
+				hub.Clients[client.ConnectionId] = client.Connection
 				break
-			case gr := <-hub.Disconnect:
-				delete(hub.Clients, gr.ConnectionId)
+			case client := <-hub.Disconnect:
+				delete(hub.Clients, client.ConnectionId)
 				break
-			case m := <-hub.Message:
-				b, err := json.Marshal(m)
+			case frame := <-hub.Message:
+				b, err := json.Marshal(frame)
 				if err != nil {
 					logrus.Error("failed to marshal hub message: ", err)
 					break
 				}
 
-				conn := hub.Clients[m.ConnectionId]
+				conn := hub.Clients[frame.ConnectionId]
 				if conn == nil {
 					logrus.Error("client connection is null")
 					break
 				}
 
-				if err := hub.sendMessage(conn, TextMessage, b); err != nil {
+				if err := hub.send(conn, TextMessage, b); err != nil {
 					logrus.Error("failed to send message: ", err)
 					break
 				}
@@ -126,7 +126,7 @@ func (hub *Hub) ReadMessages(conn *websocketLib.Conn) {
 	}()
 
 	for {
-		_, msg, err := hub.readMessage(conn)
+		_, msg, err := hub.read(conn)
 
 		if err != nil {
 			logrus.Error("error message from websocket: ", err)
@@ -148,7 +148,7 @@ func (hub *Hub) SendMessage(connectionId string, msg []byte) error {
 	return nil
 }
 
-func (hub *Hub) readMessage(conn *websocketLib.Conn) (int, []byte, error) {
+func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {
 	hub.ReadLock.Lock()
 	t, p, err := conn.ReadMessage()
 	hub.ReadLock.Unlock()
@@ -156,7 +156,7 @@ func (hub *Hub) readMessage(conn *websocketLib.Conn) (int, []byte, error) {
 	return t, p, err
 }
 
-func (hub *Hub) sendMessage(conn *websocketLib.Conn, messageType int, data []byte) error {
+func (hub *Hub) send(conn *websocketLib.Conn, messageType int, data []byte) error {
 	hub.SendLock.Lock()
 	err := conn.WriteMessage(messageType, data)
 	hub.SendLock.Unlock()
