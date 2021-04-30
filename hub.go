@@ -2,8 +2,6 @@ package websocket
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	websocketLib "github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -26,7 +24,7 @@ type Hub struct {
 	Connect    chan Client
 	Disconnect chan Client
 	Clients    map[string]*websocketLib.Conn
-	Message    chan []byte
+	Message    chan *Frame
 	ReadLock   sync.Mutex
 	SendLock   sync.Mutex
 }
@@ -37,8 +35,8 @@ type Client struct {
 }
 
 type Frame struct {
-	C       string
-	Content string
+	ConnectionId string
+	Content      string
 }
 
 func NewHub() *Hub {
@@ -46,7 +44,7 @@ func NewHub() *Hub {
 		Connect:    make(chan Client),
 		Disconnect: make(chan Client),
 		Clients:    make(map[string]*websocketLib.Conn, 0),
-		Message:    make(chan []byte, 0),
+		Message:    make(chan *Frame, 0),
 	}
 }
 
@@ -66,7 +64,23 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 			case gr := <-hub.Disconnect:
 				delete(hub.Clients, gr.ConnectionId)
 				break
-			case <-hub.Message:
+			case m := <-hub.Message:
+				b, err := json.Marshal(m)
+				if err != nil {
+					logrus.Error("failed to marshal hub message: ", err)
+					break
+				}
+
+				conn := hub.Clients[m.ConnectionId]
+				if conn == nil {
+					logrus.Error("client connection is null")
+					break
+				}
+
+				if err := hub.sendMessage(conn, TextMessage, b); err != nil {
+					logrus.Error("failed to send message: ", err)
+					break
+				}
 				break
 			case <-done:
 				return
@@ -124,27 +138,12 @@ func (hub *Hub) ReadMessages(conn *websocketLib.Conn) {
 }
 
 func (hub *Hub) SendMessage(connectionId string, msg []byte) error {
-	hub.SendLock.Lock()
 	frame := &Frame{
-		C:       connectionId,
-		Content: string(msg),
+		ConnectionId: connectionId,
+		Content:      string(msg),
 	}
 
-	b, err := json.Marshal(frame)
-	if err != nil {
-		return err
-	}
-
-
-	conn := hub.Clients[connectionId]
-	if conn == nil {
-		return errors.New(fmt.Sprintf("invalid connectionId: %s", connectionId))
-	}
-
-	if err := conn.WriteMessage(TextMessage, b); err != nil {
-		return err
-	}
-	hub.SendLock.Unlock()
+	hub.Message <- frame
 
 	return nil
 }
