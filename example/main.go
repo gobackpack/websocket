@@ -32,9 +32,13 @@ func main() {
 	router.GET("/ws/:connectionId", func(ctx *gin.Context) {
 		connectionId := ctx.Param("connectionId")
 
-		if err := hub.EstablishConnection(ctx.Writer, ctx.Request, connectionId); err != nil {
+		client, err := hub.EstablishConnection(ctx.Writer, ctx.Request, connectionId)
+		if err != nil {
 			logrus.Errorf("failed to establish connection -> %s", connectionId)
+			return
 		}
+
+		logrus.Info("client established connection: ", client)
 	})
 
 	router.POST("/doWork", func(ctx *gin.Context) {

@@ -36,6 +36,8 @@ type Client struct {
 	GroupId      string
 	ConnectionId string
 	Connection   *websocketLib.Conn
+	OnMessage    func([]byte) error
+	OnError      func(err error)
 }
 
 type Frame struct {
@@ -130,10 +132,10 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 	return cancelled
 }
 
-func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, groupId string) error {
+func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, groupId string) (*Client, error) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	client := &Client{
@@ -146,7 +148,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 
 	go hub.ReadMessages(client)
 
-	return nil
+	return client, nil
 }
 
 func (hub *Hub) ReadMessages(client *Client) {
@@ -166,11 +168,13 @@ func (hub *Hub) ReadMessages(client *Client) {
 		_, msg, err := hub.read(client.Connection)
 
 		if err != nil {
-			logrus.Error("error message from websocket: ", err)
+			client.OnError(err)
 			break
 		}
 
-		logrus.Info("message received: ", string(msg))
+		if err := client.OnMessage(msg); err != nil {
+			client.OnError(err)
+		}
 	}
 }
 
