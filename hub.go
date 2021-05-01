@@ -21,8 +21,8 @@ var upgrader = websocketLib.Upgrader{
 }
 
 type Hub struct {
-	Connect    chan Client
-	Disconnect chan Client
+	Connect    chan *Client
+	Disconnect chan *Client
 	Clients    map[string]*websocketLib.Conn
 	Message    chan *Frame
 	ReadLock   sync.Mutex
@@ -41,8 +41,8 @@ type Frame struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		Connect:    make(chan Client),
-		Disconnect: make(chan Client),
+		Connect:    make(chan *Client),
+		Disconnect: make(chan *Client),
 		Clients:    make(map[string]*websocketLib.Conn, 0),
 		Message:    make(chan *Frame, 0),
 	}
@@ -60,9 +60,11 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 			select {
 			case client := <-hub.Connect:
 				hub.Clients[client.ConnectionId] = client.Connection
+				logrus.Info("client connected: ", client.ConnectionId)
 				break
 			case client := <-hub.Disconnect:
 				delete(hub.Clients, client.ConnectionId)
+				logrus.Warn("client disconnected: ", client.ConnectionId)
 				break
 			case frame := <-hub.Message:
 				b, err := json.Marshal(frame)
@@ -97,36 +99,34 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, conn
 		return err
 	}
 
-	hub.Connect <- Client{
+	client := &Client{
 		ConnectionId: connectionId,
 		Connection:   conn,
 	}
 
-	go hub.ReadMessages(conn)
+	hub.Connect <- client
+
+	go hub.ReadMessages(client)
 
 	return nil
 }
 
-func (hub *Hub) DisconnectFromHub(connectionId string) {
-	hub.Disconnect <- Client{
-		ConnectionId: connectionId,
-	}
-}
-
-func (hub *Hub) ReadMessages(conn *websocketLib.Conn) {
+func (hub *Hub) ReadMessages(client *Client) {
 	defer func() {
 		logrus.Warn("websocket connection stopped reading messages")
 
-		if err := conn.Close(); err != nil {
+		if err := client.Connection.Close(); err != nil {
 			logrus.Error("failed to close websocket connection: ", err)
 			return
 		}
 
 		logrus.Warn("websocket connection closed")
+
+		hub.Disconnect <- client
 	}()
 
 	for {
-		_, msg, err := hub.read(conn)
+		_, msg, err := hub.read(client.Connection)
 
 		if err != nil {
 			logrus.Error("error message from websocket: ", err)
