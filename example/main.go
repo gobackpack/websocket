@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -19,6 +18,11 @@ func main() {
 
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+	router.LoadHTMLFiles("example/index.html")
+
+	router.GET("/join/:connectionId", func(c *gin.Context) {
+		c.HTML(200, "index.html", nil)
+	})
 
 	hub := websocket.NewHub()
 
@@ -34,19 +38,17 @@ func main() {
 	})
 
 	router.POST("/doWork", func(ctx *gin.Context) {
-		connectionId := ctx.GetHeader("connectionId")
-		if strings.TrimSpace(connectionId) == "" {
-			ctx.JSON(http.StatusUnauthorized, "invalid connectionId")
-			return
-		}
+		go func() {
+			for i := 0; i < 5; i++ {
+				hub.SendToGroup("1", []byte("hello client: 1"))
+			}
+		}()
 
-		// do some work
-		// notify user about after work is done
-
-		if err := hub.SendMessage(connectionId, []byte("hello :)")); err != nil {
-			ctx.JSON(http.StatusBadRequest, "failed to send message")
-			return
-		}
+		go func() {
+			for i := 0; i < 5; i++ {
+				hub.SendToAllGroups([]byte("hello all clients"))
+			}
+		}()
 	})
 
 	httpServe(router, "", "8080")
