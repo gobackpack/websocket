@@ -23,12 +23,13 @@ var upgrader = websocketLib.Upgrader{
 }
 
 type Hub struct {
-	Connect    chan *Client
-	Disconnect chan *Client
-	Clients    map[string]map[string]*websocketLib.Conn
-	Message    chan *Frame
-	ReadLock   sync.Mutex
-	SendLock   sync.Mutex
+	Connect              chan *Client
+	Disconnect           chan *Client
+	Clients              map[string]map[string]*websocketLib.Conn
+	BroadcastToGroup     chan *Frame
+	BroadcastToAllGroups chan *Frame
+	ReadLock             sync.Mutex
+	SendLock             sync.Mutex
 }
 
 type Client struct {
@@ -45,10 +46,11 @@ type Frame struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		Connect:    make(chan *Client),
-		Disconnect: make(chan *Client),
-		Clients:    make(map[string]map[string]*websocketLib.Conn, 0),
-		Message:    make(chan *Frame, 0),
+		Connect:              make(chan *Client),
+		Disconnect:           make(chan *Client),
+		Clients:              make(map[string]map[string]*websocketLib.Conn, 0),
+		BroadcastToGroup:     make(chan *Frame, 0),
+		BroadcastToAllGroups: make(chan *Frame, 0),
 	}
 }
 
@@ -76,7 +78,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 					logrus.Warnf("client [%v] disconnected from group [%v]: ", client.ConnectionId, client.GroupId)
 				}
 				break
-			case frame := <-hub.Message:
+			case frame := <-hub.BroadcastToGroup:
 				if hub.Clients[frame.GroupId] != nil {
 					b, err := json.Marshal(frame)
 					if err != nil {
@@ -91,6 +93,26 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 					}
 
 					for _, conn := range group {
+						go func(conn *websocketLib.Conn) {
+							if err := hub.send(conn, TextMessage, b); err != nil {
+								logrus.Error("failed to send message: ", err)
+								return
+							}
+						}(conn)
+					}
+				}
+				break
+			case frame := <-hub.BroadcastToAllGroups:
+				for groupId, connections := range hub.Clients {
+					frame.GroupId = groupId
+
+					b, err := json.Marshal(frame)
+					if err != nil {
+						logrus.Error("failed to marshal hub message: ", err)
+						break
+					}
+
+					for _, conn := range connections {
 						go func(conn *websocketLib.Conn) {
 							if err := hub.send(conn, TextMessage, b); err != nil {
 								logrus.Error("failed to send message: ", err)
@@ -152,16 +174,23 @@ func (hub *Hub) ReadMessages(client *Client) {
 	}
 }
 
-func (hub *Hub) SendMessage(groupId string, msg []byte) error {
+func (hub *Hub) SendToGroup(groupId string, msg []byte) {
 	frame := &Frame{
 		GroupId: groupId,
 		Content: string(msg),
 		Time:    time.Now(),
 	}
 
-	hub.Message <- frame
+	hub.BroadcastToGroup <- frame
+}
 
-	return nil
+func (hub *Hub) SendToAllGroups(msg []byte) {
+	frame := &Frame{
+		Content: string(msg),
+		Time:    time.Now(),
+	}
+
+	hub.BroadcastToAllGroups <- frame
 }
 
 func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {
