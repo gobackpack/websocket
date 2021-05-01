@@ -81,19 +81,13 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				break
 			case frame := <-hub.BroadcastToGroup:
 				if hub.Clients[frame.GroupId] != nil {
-					group := hub.Clients[frame.GroupId]
-					if group == nil {
-						logrus.Error("client group is null")
-						break
-					}
-
 					b, err := json.Marshal(frame)
 					if err != nil {
 						logrus.Error("failed to marshal hub message: ", err)
 						break
 					}
 
-					for _, conn := range group {
+					for _, conn := range hub.Clients[frame.GroupId] {
 						go func(conn *websocketLib.Conn) {
 							if err := hub.send(conn, TextMessage, b); err != nil {
 								logrus.Error("failed to send message: ", err)
