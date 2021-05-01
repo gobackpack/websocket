@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"sync"
+	"time"
 )
 
 const (
@@ -37,8 +38,9 @@ type Client struct {
 }
 
 type Frame struct {
-	GroupId string
-	Content string
+	GroupId string    `json:"group_id"`
+	Content string    `json:"content"`
+	Time    time.Time `json:"time"`
 }
 
 func NewHub() *Hub {
@@ -89,10 +91,12 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 					}
 
 					for _, conn := range group {
-						if err := hub.send(conn, TextMessage, b); err != nil {
-							logrus.Error("failed to send message: ", err)
-							break
-						}
+						go func(conn *websocketLib.Conn) {
+							if err := hub.send(conn, TextMessage, b); err != nil {
+								logrus.Error("failed to send message: ", err)
+								return
+							}
+						}(conn)
 					}
 				}
 				break
@@ -152,6 +156,7 @@ func (hub *Hub) SendMessage(groupId string, msg []byte) error {
 	frame := &Frame{
 		GroupId: groupId,
 		Content: string(msg),
+		Time:    time.Now(),
 	}
 
 	hub.Message <- frame
