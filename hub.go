@@ -68,9 +68,8 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				if hub.Clients[client.GroupId] == nil {
 					hub.Clients[client.GroupId] = make(map[string]*websocketLib.Conn, 0)
 				}
-				clientId := uuid.New().String()
-				hub.Clients[client.GroupId][clientId] = client.Connection
-				logrus.Infof("client [%v] connected to group [%v]", clientId, client.GroupId)
+				hub.Clients[client.GroupId][client.ConnectionId] = client.Connection
+				logrus.Infof("client [%v] connected to group [%v]", client.ConnectionId, client.GroupId)
 				break
 			case client := <-hub.Disconnect:
 				if hub.Clients[client.GroupId] != nil {
@@ -138,8 +137,9 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 	}
 
 	client := &Client{
-		GroupId:    groupId,
-		Connection: conn,
+		GroupId:      groupId,
+		ConnectionId: uuid.New().String(),
+		Connection:   conn,
 	}
 
 	hub.Connect <- client
