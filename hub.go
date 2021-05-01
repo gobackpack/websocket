@@ -79,15 +79,15 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				break
 			case frame := <-hub.BroadcastToGroup:
 				if hub.Clients[frame.GroupId] != nil {
-					b, err := json.Marshal(frame)
-					if err != nil {
-						logrus.Error("failed to marshal hub message: ", err)
-						break
-					}
-
 					group := hub.Clients[frame.GroupId]
 					if group == nil {
 						logrus.Error("client group is null")
+						break
+					}
+
+					b, err := json.Marshal(frame)
+					if err != nil {
+						logrus.Error("failed to marshal hub message: ", err)
 						break
 					}
 
