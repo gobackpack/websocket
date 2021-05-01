@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
 	"github.com/sirupsen/logrus"
@@ -21,6 +22,8 @@ func main() {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.LoadHTMLFiles("example/index.html")
+
+	pprof.Register(router)
 
 	router.GET("/join/:connectionId", func(c *gin.Context) {
 		c.HTML(200, "index.html", nil)
@@ -61,7 +64,6 @@ func main() {
 				hub.SendToAllGroups([]byte("all groups"))
 			}
 		}()
-
 
 		connId := ctx.GetHeader("connection_id")
 		if strings.TrimSpace(connId) != "" {
