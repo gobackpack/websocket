@@ -86,7 +86,7 @@ func main() {
 			return
 		}
 
-		hub.DisconnectFromGroup(groupId, connId)
+		go hub.DisconnectFromGroup(groupId, connId)
 	})
 
 	httpServe(router, "", "8080")
