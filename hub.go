@@ -180,15 +180,9 @@ func (hub *Hub) DisconnectFromGroup(groupId string, connectionId string) {
 
 func (hub *Hub) ReadMessages(client *Client) {
 	defer func() {
-		hub.Disconnect <- client
-
 		logrus.Warn("websocket connection stopped reading messages")
 
-		if err := client.Connection.Close(); err != nil {
-			logrus.Error("failed to close websocket connection: ", err)
-		}
-
-		logrus.Warn("websocket connection closed")
+		hub.Disconnect <- client
 	}()
 
 	for {
