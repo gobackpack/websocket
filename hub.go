@@ -23,13 +23,14 @@ var upgrader = websocketLib.Upgrader{
 }
 
 type Hub struct {
-	Connect              chan *Client
-	Disconnect           chan *Client
-	Clients              map[string]map[string]*websocketLib.Conn
-	BroadcastToGroup     chan *Frame
-	BroadcastToAllGroups chan *Frame
-	ReadLock             sync.Mutex
-	SendLock             sync.Mutex
+	Connect               chan *Client
+	Disconnect            chan *Client
+	Clients               map[string]map[string]*websocketLib.Conn
+	BroadcastToGroup      chan *Frame
+	BroadcastToAllGroups  chan *Frame
+	BroadcastToConnection chan *Frame
+	ReadLock              sync.Mutex
+	SendLock              sync.Mutex
 }
 
 type Client struct {
@@ -41,18 +42,20 @@ type Client struct {
 }
 
 type Frame struct {
-	GroupId string    `json:"group_id"`
-	Content string    `json:"content"`
-	Time    time.Time `json:"time"`
+	GroupId      string    `json:"group_id"`
+	ConnectionId string    `json:"connection_id"`
+	Content      string    `json:"content"`
+	Time         time.Time `json:"time"`
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		Connect:              make(chan *Client),
-		Disconnect:           make(chan *Client),
-		Clients:              make(map[string]map[string]*websocketLib.Conn, 0),
-		BroadcastToGroup:     make(chan *Frame, 0),
-		BroadcastToAllGroups: make(chan *Frame, 0),
+		Connect:               make(chan *Client),
+		Disconnect:            make(chan *Client),
+		Clients:               make(map[string]map[string]*websocketLib.Conn, 0),
+		BroadcastToGroup:      make(chan *Frame, 0),
+		BroadcastToAllGroups:  make(chan *Frame, 0),
+		BroadcastToConnection: make(chan *Frame, 0),
 	}
 }
 
@@ -115,6 +118,23 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 							}
 						}(conn)
 					}
+				}
+				break
+			case frame := <-hub.BroadcastToConnection:
+				if hub.Clients[frame.GroupId] != nil && hub.Clients[frame.GroupId][frame.ConnectionId] != nil {
+					b, err := json.Marshal(frame)
+					if err != nil {
+						logrus.Error("failed to marshal hub message: ", err)
+						break
+					}
+
+					conn := hub.Clients[frame.GroupId][frame.ConnectionId]
+					go func() {
+						if err := hub.send(conn, TextMessage, b); err != nil {
+							logrus.Error("failed to send message: ", err)
+							return
+						}
+					}()
 				}
 				break
 			case <-done:
@@ -189,6 +209,17 @@ func (hub *Hub) SendToAllGroups(msg []byte) {
 	}
 
 	hub.BroadcastToAllGroups <- frame
+}
+
+func (hub *Hub) SendToConnectionId(groupId string, connectionId string, msg []byte) {
+	frame := &Frame{
+		GroupId:      groupId,
+		ConnectionId: connectionId,
+		Content:      string(msg),
+		Time:         time.Now(),
+	}
+
+	hub.BroadcastToConnection <- frame
 }
 
 func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {

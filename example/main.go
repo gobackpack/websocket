@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
 	"github.com/sirupsen/logrus"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -42,17 +44,33 @@ func main() {
 	})
 
 	router.POST("/doWork", func(ctx *gin.Context) {
+		groupId := ctx.GetHeader("group_id")
+		if strings.TrimSpace(groupId) == "" {
+			ctx.JSON(http.StatusBadRequest, "missing group_id from headers")
+			return
+		}
+
 		go func() {
 			for i := 0; i < 5; i++ {
-				hub.SendToGroup("1", []byte("hello client: 1"))
+				hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
 			}
 		}()
 
 		go func() {
 			for i := 0; i < 5; i++ {
-				hub.SendToAllGroups([]byte("hello all clients"))
+				hub.SendToAllGroups([]byte("all groups"))
 			}
 		}()
+
+
+		connId := ctx.GetHeader("connection_id")
+		if strings.TrimSpace(connId) != "" {
+			go func() {
+				for i := 0; i < 5; i++ {
+					hub.SendToConnectionId(groupId, connId, []byte(fmt.Sprintf("groupId [%v] connectionId [%v]", groupId, connId)))
+				}
+			}()
+		}
 	})
 
 	httpServe(router, "", "8080")
