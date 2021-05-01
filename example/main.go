@@ -73,6 +73,22 @@ func main() {
 		}
 	})
 
+	router.POST("/disconnect", func(ctx *gin.Context) {
+		groupId := ctx.GetHeader("group_id")
+		if strings.TrimSpace(groupId) == "" {
+			ctx.JSON(http.StatusBadRequest, "missing group_id from headers")
+			return
+		}
+
+		connId := ctx.GetHeader("connection_id")
+		if strings.TrimSpace(connId) == "" {
+			ctx.JSON(http.StatusBadRequest, "missing connection_id from headers")
+			return
+		}
+
+		hub.DisconnectFromGroup(groupId, connId)
+	})
+
 	httpServe(router, "", "8080")
 
 	close(done)

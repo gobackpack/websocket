@@ -78,6 +78,10 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				break
 			case client := <-hub.Disconnect:
 				if hub.Clients[client.GroupId] != nil {
+					if err := hub.Clients[client.GroupId][client.ConnectionId].Close(); err != nil {
+						logrus.Errorf("client [%v] failed to disconnect from group [%v]", client.ConnectionId, client.GroupId)
+						break
+					}
 					delete(hub.Clients[client.GroupId], client.ConnectionId)
 					logrus.Warnf("client [%v] disconnected from group [%v]: ", client.ConnectionId, client.GroupId)
 				}
@@ -163,6 +167,15 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 	go hub.ReadMessages(client)
 
 	return client, nil
+}
+
+func (hub *Hub) DisconnectFromGroup(groupId string, connectionId string) {
+	client := &Client{
+		GroupId:      groupId,
+		ConnectionId: connectionId,
+	}
+
+	hub.Disconnect <- client
 }
 
 func (hub *Hub) ReadMessages(client *Client) {
