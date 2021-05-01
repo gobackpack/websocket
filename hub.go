@@ -117,10 +117,9 @@ func (hub *Hub) ReadMessages(client *Client) {
 
 		if err := client.Connection.Close(); err != nil {
 			logrus.Error("failed to close websocket connection: ", err)
-			return
+		} else {
+			logrus.Warn("websocket connection closed")
 		}
-
-		logrus.Warn("websocket connection closed")
 
 		hub.Disconnect <- client
 	}()
