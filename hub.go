@@ -83,7 +83,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 						break
 					}
 					delete(hub.Clients[client.GroupId], client.ConnectionId)
-					logrus.Warnf("client [%v] disconnected from group [%v]: ", client.ConnectionId, client.GroupId)
+					logrus.Warnf("client [%v] disconnected from group [%v]", client.ConnectionId, client.GroupId)
 				}
 				break
 			case frame := <-hub.BroadcastToGroup:
@@ -160,6 +160,14 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		GroupId:      groupId,
 		ConnectionId: uuid.New().String(),
 		Connection:   conn,
+	}
+
+	if client.OnMessage == nil {
+		client.OnMessage = client.onMessage
+	}
+
+	if client.OnError == nil {
+		client.OnError = client.onError
 	}
 
 	hub.Connect <- client
@@ -243,4 +251,13 @@ func (hub *Hub) send(conn *websocketLib.Conn, messageType int, data []byte) erro
 	hub.SendLock.Unlock()
 
 	return err
+}
+
+func (client *Client) onMessage(msg []byte) error {
+	logrus.Infof("client [%v] received message: %v", client.ConnectionId, string(msg))
+	return nil
+}
+
+func (client *Client) onError(err error) {
+	logrus.Errorf("client [%v] received error message: %v", client.ConnectionId, err)
 }
