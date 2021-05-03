@@ -262,12 +262,6 @@ func (hub *Hub) connection(groupId, connectionId string) *websocketLib.Conn {
 	return nil
 }
 
-func (hub *Hub) createGroupIfNotExists(groupId string) {
-	if hub.group(groupId) == nil {
-		hub.Clients[groupId] = make(map[string]*websocketLib.Conn, 0)
-	}
-}
-
 func (hub *Hub) assignConnectionToGroup(groupId string, connectionId string, conn *websocketLib.Conn) {
 	hub.createGroupIfNotExists(groupId)
 	hub.Clients[groupId][connectionId] = conn
@@ -283,5 +277,11 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 
 		delete(hub.group(groupId), connectionId)
 		logrus.Warnf("client [%v] disconnected from group [%v]", connectionId, groupId)
+	}
+}
+
+func (hub *Hub) createGroupIfNotExists(groupId string) {
+	if hub.group(groupId) == nil {
+		hub.Clients[groupId] = make(map[string]*websocketLib.Conn, 0)
 	}
 }
