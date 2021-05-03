@@ -70,19 +70,10 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 		for {
 			select {
 			case client := <-hub.Connect:
-				hub.createGroupIfNotExists(client.GroupId)
-				hub.Clients[client.GroupId][client.ConnectionId] = client.Connection
-				logrus.Infof("client [%v] connected to group [%v]", client.ConnectionId, client.GroupId)
+				hub.assignConnectionToGroup(client.GroupId, client.ConnectionId, client.Connection)
 				break
 			case client := <-hub.Disconnect:
-				if conn := hub.connection(client.GroupId, client.ConnectionId); conn != nil {
-					if err := conn.Close(); err != nil {
-						logrus.Errorf("client [%v] failed to disconnect from group [%v]", client.ConnectionId, client.GroupId)
-						break
-					}
-					delete(hub.group(client.GroupId), client.ConnectionId)
-					logrus.Warnf("client [%v] disconnected from group [%v]", client.ConnectionId, client.GroupId)
-				}
+				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
 			case frame := <-hub.BroadcastToGroup:
 				if group := hub.group(frame.GroupId); group != nil {
@@ -274,5 +265,23 @@ func (hub *Hub) connection(groupId, connectionId string) *websocketLib.Conn {
 func (hub *Hub) createGroupIfNotExists(groupId string) {
 	if hub.group(groupId) == nil {
 		hub.Clients[groupId] = make(map[string]*websocketLib.Conn, 0)
+	}
+}
+
+func (hub *Hub) assignConnectionToGroup(groupId string, connectionId string, conn *websocketLib.Conn) {
+	hub.createGroupIfNotExists(groupId)
+	hub.Clients[groupId][connectionId] = conn
+	logrus.Infof("client [%v] connected to group [%v]", connectionId, groupId)
+}
+
+func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
+	if conn := hub.connection(groupId, connectionId); conn != nil {
+		if err := conn.Close(); err != nil {
+			logrus.Errorf("client [%v] failed to disconnect from group [%v]", connectionId, groupId)
+			return
+		}
+
+		delete(hub.group(groupId), connectionId)
+		logrus.Warnf("client [%v] disconnected from group [%v]", connectionId, groupId)
 	}
 }
