@@ -77,8 +77,8 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				logrus.Infof("client [%v] connected to group [%v]", client.ConnectionId, client.GroupId)
 				break
 			case client := <-hub.Disconnect:
-				if hub.Connection(client.GroupId, client.ConnectionId) != nil {
-					if err := hub.Connection(client.GroupId, client.ConnectionId).Close(); err != nil {
+				if conn := hub.Connection(client.GroupId, client.ConnectionId); conn != nil {
+					if err := conn.Close(); err != nil {
 						logrus.Errorf("client [%v] failed to disconnect from group [%v]", client.ConnectionId, client.GroupId)
 						break
 					}
@@ -87,14 +87,14 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				}
 				break
 			case frame := <-hub.BroadcastToGroup:
-				if hub.Group(frame.GroupId) != nil {
+				if group := hub.Group(frame.GroupId); group != nil {
 					b, err := json.Marshal(frame)
 					if err != nil {
 						logrus.Error("failed to marshal hub message: ", err)
 						break
 					}
 
-					for _, conn := range hub.Group(frame.GroupId) {
+					for _, conn := range group {
 						go func(conn *websocketLib.Conn) {
 							if err := hub.send(conn, TextMessage, b); err != nil {
 								logrus.Error("failed to send message: ", err)
@@ -125,14 +125,13 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				}
 				break
 			case frame := <-hub.BroadcastToConnection:
-				if hub.Connection(frame.GroupId, frame.ConnectionId) != nil {
+				if conn := hub.Connection(frame.GroupId, frame.ConnectionId); conn != nil {
 					b, err := json.Marshal(frame)
 					if err != nil {
 						logrus.Error("failed to marshal hub message: ", err)
 						break
 					}
 
-					conn := hub.Connection(frame.GroupId, frame.ConnectionId)
 					go func() {
 						if err := hub.send(conn, TextMessage, b); err != nil {
 							logrus.Error("failed to send message: ", err)
