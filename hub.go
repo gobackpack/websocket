@@ -176,7 +176,7 @@ func (hub *Hub) DisconnectFromGroup(groupId string, connectionId string) {
 
 func (hub *Hub) ReadMessages(client *Client) {
 	defer func() {
-		logrus.Warn("websocket connection stopped reading messages -> groupId[%v] -> connectionId[%v]",
+		logrus.Warn("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
 			client.GroupId, client.ConnectionId)
 
 		hub.Disconnect <- client
