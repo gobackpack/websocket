@@ -70,24 +70,22 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 		for {
 			select {
 			case client := <-hub.Connect:
-				if hub.Group(client.GroupId) == nil {
-					hub.Clients[client.GroupId] = make(map[string]*websocketLib.Conn, 0)
-				}
+				hub.createGroupIfNotExists(client.GroupId)
 				hub.Clients[client.GroupId][client.ConnectionId] = client.Connection
 				logrus.Infof("client [%v] connected to group [%v]", client.ConnectionId, client.GroupId)
 				break
 			case client := <-hub.Disconnect:
-				if conn := hub.Connection(client.GroupId, client.ConnectionId); conn != nil {
+				if conn := hub.connection(client.GroupId, client.ConnectionId); conn != nil {
 					if err := conn.Close(); err != nil {
 						logrus.Errorf("client [%v] failed to disconnect from group [%v]", client.ConnectionId, client.GroupId)
 						break
 					}
-					delete(hub.Group(client.GroupId), client.ConnectionId)
+					delete(hub.group(client.GroupId), client.ConnectionId)
 					logrus.Warnf("client [%v] disconnected from group [%v]", client.ConnectionId, client.GroupId)
 				}
 				break
 			case frame := <-hub.BroadcastToGroup:
-				if group := hub.Group(frame.GroupId); group != nil {
+				if group := hub.group(frame.GroupId); group != nil {
 					b, err := json.Marshal(frame)
 					if err != nil {
 						logrus.Error("failed to marshal hub message: ", err)
@@ -125,7 +123,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				}
 				break
 			case frame := <-hub.BroadcastToConnection:
-				if conn := hub.Connection(frame.GroupId, frame.ConnectionId); conn != nil {
+				if conn := hub.connection(frame.GroupId, frame.ConnectionId); conn != nil {
 					b, err := json.Marshal(frame)
 					if err != nil {
 						logrus.Error("failed to marshal hub message: ", err)
@@ -252,16 +250,22 @@ func (hub *Hub) send(conn *websocketLib.Conn, messageType int, data []byte) erro
 	return err
 }
 
-func (hub *Hub) Group(groupId string) map[string]*websocketLib.Conn {
+func (hub *Hub) group(groupId string) map[string]*websocketLib.Conn {
 	return hub.Clients[groupId]
 }
 
-func (hub *Hub) Connection(groupId, connectionId string) *websocketLib.Conn {
-	if hub.Group(groupId) != nil {
+func (hub *Hub) connection(groupId, connectionId string) *websocketLib.Conn {
+	if hub.group(groupId) != nil {
 		return hub.Clients[groupId][connectionId]
 	}
 
 	return nil
+}
+
+func (hub *Hub) createGroupIfNotExists(groupId string) {
+	if hub.group(groupId) == nil {
+		hub.Clients[groupId] = make(map[string]*websocketLib.Conn, 0)
+	}
 }
 
 func (client *Client) onMessage(msg []byte) error {
