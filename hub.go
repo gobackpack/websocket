@@ -70,31 +70,31 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 		for {
 			select {
 			case client := <-hub.Connect:
-				if hub.Clients[client.GroupId] == nil {
+				if hub.Group(client.GroupId) == nil {
 					hub.Clients[client.GroupId] = make(map[string]*websocketLib.Conn, 0)
 				}
 				hub.Clients[client.GroupId][client.ConnectionId] = client.Connection
 				logrus.Infof("client [%v] connected to group [%v]", client.ConnectionId, client.GroupId)
 				break
 			case client := <-hub.Disconnect:
-				if hub.Clients[client.GroupId] != nil && hub.Clients[client.GroupId][client.ConnectionId] != nil {
-					if err := hub.Clients[client.GroupId][client.ConnectionId].Close(); err != nil {
+				if hub.Connection(client.GroupId, client.ConnectionId) != nil {
+					if err := hub.Connection(client.GroupId, client.ConnectionId).Close(); err != nil {
 						logrus.Errorf("client [%v] failed to disconnect from group [%v]", client.ConnectionId, client.GroupId)
 						break
 					}
-					delete(hub.Clients[client.GroupId], client.ConnectionId)
+					delete(hub.Group(client.GroupId), client.ConnectionId)
 					logrus.Warnf("client [%v] disconnected from group [%v]", client.ConnectionId, client.GroupId)
 				}
 				break
 			case frame := <-hub.BroadcastToGroup:
-				if hub.Clients[frame.GroupId] != nil {
+				if hub.Group(frame.GroupId) != nil {
 					b, err := json.Marshal(frame)
 					if err != nil {
 						logrus.Error("failed to marshal hub message: ", err)
 						break
 					}
 
-					for _, conn := range hub.Clients[frame.GroupId] {
+					for _, conn := range hub.Group(frame.GroupId) {
 						go func(conn *websocketLib.Conn) {
 							if err := hub.send(conn, TextMessage, b); err != nil {
 								logrus.Error("failed to send message: ", err)
@@ -125,14 +125,14 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				}
 				break
 			case frame := <-hub.BroadcastToConnection:
-				if hub.Clients[frame.GroupId] != nil && hub.Clients[frame.GroupId][frame.ConnectionId] != nil {
+				if hub.Connection(frame.GroupId, frame.ConnectionId) != nil {
 					b, err := json.Marshal(frame)
 					if err != nil {
 						logrus.Error("failed to marshal hub message: ", err)
 						break
 					}
 
-					conn := hub.Clients[frame.GroupId][frame.ConnectionId]
+					conn := hub.Connection(frame.GroupId, frame.ConnectionId)
 					go func() {
 						if err := hub.send(conn, TextMessage, b); err != nil {
 							logrus.Error("failed to send message: ", err)
@@ -251,6 +251,18 @@ func (hub *Hub) send(conn *websocketLib.Conn, messageType int, data []byte) erro
 	hub.SendLock.Unlock()
 
 	return err
+}
+
+func (hub *Hub) Group(groupId string) map[string]*websocketLib.Conn {
+	return hub.Clients[groupId]
+}
+
+func (hub *Hub) Connection(groupId, connectionId string) *websocketLib.Conn {
+	if hub.Group(groupId) != nil {
+		return hub.Clients[groupId][connectionId]
+	}
+
+	return nil
 }
 
 func (client *Client) onMessage(msg []byte) error {
