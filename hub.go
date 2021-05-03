@@ -250,6 +250,15 @@ func (hub *Hub) write(conn *websocketLib.Conn, messageType int, data []byte) err
 	return err
 }
 
+func (client *Client) onMessage(msg []byte) error {
+	logrus.Infof("client [%v] received message: %v", client.ConnectionId, string(msg))
+	return nil
+}
+
+func (client *Client) onError(err error) {
+	logrus.Errorf("client [%v] received error message: %v", client.ConnectionId, err)
+}
+
 func (hub *Hub) group(groupId string) map[string]*websocketLib.Conn {
 	return hub.Clients[groupId]
 }
@@ -266,13 +275,4 @@ func (hub *Hub) createGroupIfNotExists(groupId string) {
 	if hub.group(groupId) == nil {
 		hub.Clients[groupId] = make(map[string]*websocketLib.Conn, 0)
 	}
-}
-
-func (client *Client) onMessage(msg []byte) error {
-	logrus.Infof("client [%v] received message: %v", client.ConnectionId, string(msg))
-	return nil
-}
-
-func (client *Client) onError(err error) {
-	logrus.Errorf("client [%v] received error message: %v", client.ConnectionId, err)
 }
