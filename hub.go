@@ -77,7 +77,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				logrus.Infof("client [%v] connected to group [%v]", client.ConnectionId, client.GroupId)
 				break
 			case client := <-hub.Disconnect:
-				if hub.Clients[client.GroupId] != nil {
+				if hub.Clients[client.GroupId] != nil && hub.Clients[client.GroupId][client.ConnectionId] != nil {
 					if err := hub.Clients[client.GroupId][client.ConnectionId].Close(); err != nil {
 						logrus.Errorf("client [%v] failed to disconnect from group [%v]", client.ConnectionId, client.GroupId)
 						break
