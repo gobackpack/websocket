@@ -94,8 +94,8 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 
 					for _, conn := range group {
 						go func(conn *websocketLib.Conn) {
-							if err := hub.send(conn, TextMessage, b); err != nil {
-								logrus.Error("failed to send message: ", err)
+							if err := hub.write(conn, TextMessage, b); err != nil {
+								logrus.Error("failed to write message: ", err)
 								return
 							}
 						}(conn)
@@ -114,8 +114,8 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 
 					for _, conn := range connections {
 						go func(conn *websocketLib.Conn) {
-							if err := hub.send(conn, TextMessage, b); err != nil {
-								logrus.Error("failed to send message: ", err)
+							if err := hub.write(conn, TextMessage, b); err != nil {
+								logrus.Error("failed to write message: ", err)
 								return
 							}
 						}(conn)
@@ -131,8 +131,8 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 					}
 
 					go func() {
-						if err := hub.send(conn, TextMessage, b); err != nil {
-							logrus.Error("failed to send message: ", err)
+						if err := hub.write(conn, TextMessage, b); err != nil {
+							logrus.Error("failed to write message: ", err)
 							return
 						}
 					}()
@@ -242,7 +242,7 @@ func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {
 	return t, p, err
 }
 
-func (hub *Hub) send(conn *websocketLib.Conn, messageType int, data []byte) error {
+func (hub *Hub) write(conn *websocketLib.Conn, messageType int, data []byte) error {
 	hub.SendLock.Lock()
 	err := conn.WriteMessage(messageType, data)
 	hub.SendLock.Unlock()
