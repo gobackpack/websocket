@@ -77,85 +77,13 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
 			case frame := <-hub.BroadcastToGroup:
-				if group := hub.group(frame.GroupId); group != nil {
-					b, err := json.Marshal(frame)
-					if err != nil {
-						logrus.Error("failed to marshal hub message: ", err)
-						break
-					}
-
-					for connId, conn := range group {
-						go func(connId string, conn *websocketLib.Conn) {
-							if err := hub.write(conn, TextMessage, b); err != nil {
-								logrus.Error("BroadcastToGroup failed: ", err)
-
-								if strings.Contains(err.Error(), "broken pipe") {
-									logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connId, frame.GroupId)
-									hub.Disconnect <- &Client{
-										GroupId:      frame.GroupId,
-										ConnectionId: connId,
-									}
-								}
-
-								return
-							}
-						}(connId, conn)
-					}
-				}
+				hub.broadcastToGroup(frame)
 				break
 			case frame := <-hub.BroadcastToAllGroups:
-				for groupId, connections := range hub.Clients {
-					frame.GroupId = groupId
-
-					b, err := json.Marshal(frame)
-					if err != nil {
-						logrus.Error("failed to marshal hub message: ", err)
-						break
-					}
-
-					for connId, conn := range connections {
-						go func(connId string, conn *websocketLib.Conn) {
-							if err := hub.write(conn, TextMessage, b); err != nil {
-								logrus.Error("BroadcastToAllGroups failed: ", err)
-
-								if strings.Contains(err.Error(), "broken pipe") {
-									logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connId, frame.GroupId)
-									hub.Disconnect <- &Client{
-										GroupId:      frame.GroupId,
-										ConnectionId: connId,
-									}
-								}
-
-								return
-							}
-						}(connId, conn)
-					}
-				}
+				hub.broadcastToAllGroups(frame)
 				break
 			case frame := <-hub.BroadcastToConnection:
-				if conn := hub.connection(frame.GroupId, frame.ConnectionId); conn != nil {
-					b, err := json.Marshal(frame)
-					if err != nil {
-						logrus.Error("failed to marshal hub message: ", err)
-						break
-					}
-
-					go func() {
-						if err := hub.write(conn, TextMessage, b); err != nil {
-							logrus.Error("BroadcastToConnection failed: ", err)
-
-							if strings.Contains(err.Error(), "broken pipe") {
-								logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", frame.ConnectionId, frame.GroupId)
-								hub.Disconnect <- &Client{
-									GroupId:      frame.GroupId,
-									ConnectionId: frame.ConnectionId,
-								}
-							}
-
-							return
-						}
-					}()
-				}
+				hub.broadcastToConnection(frame)
 				break
 			case <-done:
 				return
@@ -270,15 +198,6 @@ func (hub *Hub) write(conn *websocketLib.Conn, messageType int, data []byte) err
 	return err
 }
 
-func (client *Client) onMessage(msg []byte) error {
-	logrus.Infof("client [%v] received message: %v", client.ConnectionId, string(msg))
-	return nil
-}
-
-func (client *Client) onError(err error) {
-	logrus.Errorf("client [%v] received error message: %v", client.ConnectionId, err)
-}
-
 func (hub *Hub) group(groupId string) map[string]*websocketLib.Conn {
 	return hub.Clients[groupId]
 }
@@ -313,4 +232,101 @@ func (hub *Hub) createGroupIfNotExists(groupId string) {
 	if hub.group(groupId) == nil {
 		hub.Clients[groupId] = make(map[string]*websocketLib.Conn, 0)
 	}
+}
+
+func (hub *Hub) broadcastToGroup(frame *Frame) {
+	if group := hub.group(frame.GroupId); group != nil {
+		b, err := json.Marshal(frame)
+		if err != nil {
+			logrus.Error("failed to marshal hub message: ", err)
+			return
+		}
+
+		for connId, conn := range group {
+			go func(connId string, conn *websocketLib.Conn) {
+				if err := hub.write(conn, TextMessage, b); err != nil {
+					logrus.Error("BroadcastToGroup failed: ", err)
+
+					if errBrokenPipe(err) {
+						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connId, frame.GroupId)
+						hub.Disconnect <- &Client{
+							GroupId:      frame.GroupId,
+							ConnectionId: connId,
+						}
+					}
+
+					return
+				}
+			}(connId, conn)
+		}
+	}
+}
+
+func (hub *Hub) broadcastToAllGroups(frame *Frame) {
+	for groupId, connections := range hub.Clients {
+		frame.GroupId = groupId
+
+		b, err := json.Marshal(frame)
+		if err != nil {
+			logrus.Error("failed to marshal hub message: ", err)
+			break
+		}
+
+		for connId, conn := range connections {
+			go func(connId string, conn *websocketLib.Conn) {
+				if err := hub.write(conn, TextMessage, b); err != nil {
+					logrus.Error("BroadcastToAllGroups failed: ", err)
+
+					if errBrokenPipe(err) {
+						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connId, frame.GroupId)
+						hub.Disconnect <- &Client{
+							GroupId:      frame.GroupId,
+							ConnectionId: connId,
+						}
+					}
+
+					return
+				}
+			}(connId, conn)
+		}
+	}
+}
+
+func (hub *Hub) broadcastToConnection(frame *Frame) {
+	if conn := hub.connection(frame.GroupId, frame.ConnectionId); conn != nil {
+		b, err := json.Marshal(frame)
+		if err != nil {
+			logrus.Error("failed to marshal hub message: ", err)
+			return
+		}
+
+		go func() {
+			if err := hub.write(conn, TextMessage, b); err != nil {
+				logrus.Error("BroadcastToConnection failed: ", err)
+
+				if errBrokenPipe(err) {
+					logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", frame.ConnectionId, frame.GroupId)
+					hub.Disconnect <- &Client{
+						GroupId:      frame.GroupId,
+						ConnectionId: frame.ConnectionId,
+					}
+				}
+
+				return
+			}
+		}()
+	}
+}
+
+func (client *Client) onMessage(msg []byte) error {
+	logrus.Infof("client [%v] received message: %v", client.ConnectionId, string(msg))
+	return nil
+}
+
+func (client *Client) onError(err error) {
+	logrus.Errorf("client [%v] received error message: %v", client.ConnectionId, err)
+}
+
+func errBrokenPipe(err error) bool {
+	return strings.Contains(err.Error(), "broken pipe")
 }
