@@ -6,6 +6,7 @@ import (
 	websocketLib "github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -83,13 +84,22 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 						break
 					}
 
-					for _, conn := range group {
-						go func(conn *websocketLib.Conn) {
+					for connId, conn := range group {
+						go func(connId string, conn *websocketLib.Conn) {
 							if err := hub.write(conn, TextMessage, b); err != nil {
 								logrus.Error("BroadcastToGroup failed: ", err)
+
+								if strings.Contains(err.Error(), "broken pipe") {
+									logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connId, frame.GroupId)
+									hub.Disconnect <- &Client{
+										GroupId:      frame.GroupId,
+										ConnectionId: connId,
+									}
+								}
+
 								return
 							}
-						}(conn)
+						}(connId, conn)
 					}
 				}
 				break
@@ -103,13 +113,22 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 						break
 					}
 
-					for _, conn := range connections {
-						go func(conn *websocketLib.Conn) {
+					for connId, conn := range connections {
+						go func(connId string, conn *websocketLib.Conn) {
 							if err := hub.write(conn, TextMessage, b); err != nil {
 								logrus.Error("BroadcastToAllGroups failed: ", err)
+
+								if strings.Contains(err.Error(), "broken pipe") {
+									logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connId, frame.GroupId)
+									hub.Disconnect <- &Client{
+										GroupId:      frame.GroupId,
+										ConnectionId: connId,
+									}
+								}
+
 								return
 							}
-						}(conn)
+						}(connId, conn)
 					}
 				}
 				break
@@ -124,6 +143,15 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 					go func() {
 						if err := hub.write(conn, TextMessage, b); err != nil {
 							logrus.Error("BroadcastToConnection failed: ", err)
+
+							if strings.Contains(err.Error(), "broken pipe") {
+								logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", frame.ConnectionId, frame.GroupId)
+								hub.Disconnect <- &Client{
+									GroupId:      frame.GroupId,
+									ConnectionId: frame.ConnectionId,
+								}
+							}
+
 							return
 						}
 					}()
