@@ -86,7 +86,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 					for _, conn := range group {
 						go func(conn *websocketLib.Conn) {
 							if err := hub.write(conn, TextMessage, b); err != nil {
-								logrus.Error("failed to write message: ", err)
+								logrus.Error("BroadcastToGroup failed: ", err)
 								return
 							}
 						}(conn)
@@ -106,7 +106,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 					for _, conn := range connections {
 						go func(conn *websocketLib.Conn) {
 							if err := hub.write(conn, TextMessage, b); err != nil {
-								logrus.Error("failed to write message: ", err)
+								logrus.Error("BroadcastToAllGroups failed: ", err)
 								return
 							}
 						}(conn)
@@ -123,7 +123,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 
 					go func() {
 						if err := hub.write(conn, TextMessage, b); err != nil {
-							logrus.Error("failed to write message: ", err)
+							logrus.Error("BroadcastToConnection failed: ", err)
 							return
 						}
 					}()
