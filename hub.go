@@ -123,7 +123,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 
 	hub.Connect <- client
 
-	go hub.ReadMessages(client)
+	go hub.readMessages(client)
 
 	return client, nil
 }
@@ -135,27 +135,6 @@ func (hub *Hub) DisconnectFromGroup(groupId string, connectionId string) {
 	}
 
 	hub.Disconnect <- client
-}
-
-func (hub *Hub) ReadMessages(client *Client) {
-	defer func() {
-		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
-			client.GroupId, client.ConnectionId)
-
-		//hub.Disconnect <- client
-	}()
-
-	for {
-		_, msg, err := hub.read(client.Connection)
-		if err != nil {
-			client.OnError(err)
-			break
-		}
-
-		if err := client.OnMessage(msg); err != nil {
-			client.OnError(err)
-		}
-	}
 }
 
 func (hub *Hub) SendToGroup(groupId string, msg []byte) {
@@ -186,6 +165,27 @@ func (hub *Hub) SendToConnectionId(groupId string, connectionId string, msg []by
 	}
 
 	hub.BroadcastToConnection <- frame
+}
+
+func (hub *Hub) readMessages(client *Client) {
+	defer func() {
+		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
+			client.GroupId, client.ConnectionId)
+
+		//hub.Disconnect <- client
+	}()
+
+	for {
+		_, msg, err := hub.read(client.Connection)
+		if err != nil {
+			client.OnError(err)
+			break
+		}
+
+		if err := client.OnMessage(msg); err != nil {
+			client.OnError(err)
+		}
+	}
 }
 
 func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {
