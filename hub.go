@@ -82,7 +82,6 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				hub.assignConnectionToGroup(client)
 				break
 			case client := <-hub.Disconnect:
-				// TODO: stop hub.readMessages(client)
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
 			case frame := <-hub.BroadcastToGroup:
