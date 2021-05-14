@@ -259,9 +259,12 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 		}
 
 		if group := hub.group(groupId); group != nil {
-			for _, client := range group.Clients {
-				if client.ConnectionId == connectionId {
-					client = nil
+			for i := 0; i < len(group.Clients); i++ {
+				if group.Clients[i].ConnectionId == connectionId {
+					copy(group.Clients[i:], group.Clients[i+1:])
+					group.Clients[len(group.Clients)-1] = nil
+					group.Clients = group.Clients[:len(group.Clients)-1]
+
 					logrus.Warnf("client [%v] disconnected from group [%v]", connectionId, groupId)
 				}
 			}
