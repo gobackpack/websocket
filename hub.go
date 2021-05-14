@@ -24,25 +24,25 @@ var upgrader = websocketLib.Upgrader{
 }
 
 type Hub struct {
-	Connect               chan *Client
-	Disconnect            chan *Client
-	Groups                []*Group
+	Connect    chan *Client
+	Disconnect chan *Client
+	Groups     []*Group
 
 	BroadcastToGroup      chan *Frame
 	BroadcastToAllGroups  chan *Frame
 	BroadcastToConnection chan *Frame
 
-	ReadLock              sync.Mutex
-	SendLock              sync.Mutex
+	ReadLock sync.Mutex
+	SendLock sync.Mutex
 }
 
 type Client struct {
 	GroupId      string
 	ConnectionId string
 
-	Connection   *websocketLib.Conn `json:"-"`
-	OnMessage    func([]byte) error `json:"-"`
-	OnError      func(err error)    `json:"-"`
+	Connection *websocketLib.Conn `json:"-"`
+	OnMessage  func([]byte) error `json:"-"`
+	OnError    func(err error)    `json:"-"`
 }
 
 type Group struct {
@@ -173,8 +173,6 @@ func (hub *Hub) readMessages(client *Client) {
 	defer func() {
 		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
 			client.GroupId, client.ConnectionId)
-
-		//hub.Disconnect <- client
 	}()
 
 	for {
@@ -246,24 +244,22 @@ func (hub *Hub) assignConnectionToGroup(client *Client) {
 }
 
 func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
-	if conn := hub.connection(groupId, connectionId); conn != nil {
-		// if there is error that connection is already closed, ignore it, continue with further function processing
-		if err := conn.Close(); err != nil && !errConnClosed(err) {
-			// but if there is error and connection is not already closed, stop further function processing
-			// it means connection close failed, something went wrong!
-			logrus.Errorf("client [%v] from group [%v] failed to close websocket connection: [%v]", connectionId, groupId, err)
-			return
-		}
-
-		if group := hub.group(groupId); group != nil {
-			for i := 0; i < len(group.Clients); i++ {
-				if group.Clients[i].ConnectionId == connectionId {
-					copy(group.Clients[i:], group.Clients[i+1:])
-					group.Clients[len(group.Clients)-1] = nil
-					group.Clients = group.Clients[:len(group.Clients)-1]
-
-					logrus.Warnf("client [%v] disconnected from group [%v]", connectionId, groupId)
+	if group := hub.group(groupId); group != nil {
+		for i := 0; i < len(group.Clients); i++ {
+			if group.Clients[i].ConnectionId == connectionId {
+				// if there is error that connection is already closed, ignore it, continue with further function processing
+				if err := group.Clients[i].Connection.Close(); err != nil && !errConnClosed(err) {
+					// but if there is error and connection is not already closed, stop further function processing
+					// it means connection close failed, something went wrong!
+					logrus.Errorf("client [%v] from group [%v] failed to close websocket connection: [%v]", connectionId, groupId, err)
+					return
 				}
+
+				copy(group.Clients[i:], group.Clients[i+1:])
+				group.Clients[len(group.Clients)-1] = nil
+				group.Clients = group.Clients[:len(group.Clients)-1]
+
+				logrus.Warnf("client [%v] disconnected from group [%v]", connectionId, groupId)
 			}
 		}
 	}
