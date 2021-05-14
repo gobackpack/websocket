@@ -39,6 +39,7 @@ type Hub struct {
 type Client struct {
 	GroupId      string
 	ConnectionId string
+
 	Connection   *websocketLib.Conn `json:"-"`
 	OnMessage    func([]byte) error `json:"-"`
 	OnError      func(err error)    `json:"-"`
@@ -81,6 +82,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				hub.assignConnectionToGroup(client)
 				break
 			case client := <-hub.Disconnect:
+				// TODO: stop hub.readMessages(client)
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
 			case frame := <-hub.BroadcastToGroup:
