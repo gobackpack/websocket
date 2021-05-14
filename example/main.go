@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -51,26 +52,34 @@ func main() {
 			return
 		}
 
+		wg := sync.WaitGroup{}
+		wg.Add(150)
+
 		go func() {
-			for i := 0; i < 5; i++ {
+			for i := 0; i < 50; i++ {
 				hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
+				wg.Done()
 			}
 		}()
 
 		go func() {
-			for i := 0; i < 5; i++ {
+			for i := 0; i < 50; i++ {
 				hub.SendToAllGroups([]byte("all groups"))
+				wg.Done()
 			}
 		}()
 
 		connId := ctx.GetHeader("connection_id")
 		if strings.TrimSpace(connId) != "" {
 			go func() {
-				for i := 0; i < 5; i++ {
+				for i := 0; i < 50; i++ {
 					hub.SendToConnectionId(groupId, connId, []byte(fmt.Sprintf("groupId [%v] connectionId [%v]", groupId, connId)))
+					wg.Done()
 				}
 			}()
 		}
+
+		wg.Wait()
 	})
 
 	router.POST("/disconnect", func(ctx *gin.Context) {
