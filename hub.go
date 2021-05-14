@@ -37,9 +37,9 @@ type Hub struct {
 type Client struct {
 	GroupId      string
 	ConnectionId string
-	Connection   *websocketLib.Conn
-	OnMessage    func([]byte) error
-	OnError      func(err error)
+	Connection   *websocketLib.Conn `json:"-"`
+	OnMessage    func([]byte) error `json:"-"`
+	OnError      func(err error)    `json:"-"`
 }
 
 type Group struct {
@@ -250,7 +250,10 @@ func (hub *Hub) assignConnectionToGroup(client *Client) {
 
 func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 	if conn := hub.connection(groupId, connectionId); conn != nil {
-		if err := conn.Close(); err != nil {
+		// if there is error that connection is already closed, ignore it, continue with further function processing
+		if err := conn.Close(); err != nil && !errConnClosed(err) {
+			// but if there is error and connection is not already closed, stop further function processing
+			// it means connection close failed, something went wrong!
 			logrus.Errorf("client [%v] from group [%v] failed to close websocket connection: [%v]", connectionId, groupId, err)
 			return
 		}
@@ -264,6 +267,9 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 			}
 		}
 	}
+
+	logrus.Info("after disconnect::")
+	printGroups(hub)
 }
 
 func (hub *Hub) broadcastToGroup(frame *Frame) {
@@ -354,5 +360,19 @@ func (client *Client) onError(err error) {
 }
 
 func errBrokenPipe(err error) bool {
-	return strings.Contains(err.Error(), "broken pipe") || strings.Contains(err.Error(), "use of closed network connection")
+	return strings.Contains(err.Error(), "broken pipe")
+}
+
+func errConnClosed(err error) bool {
+	return strings.Contains(err.Error(), "use of closed network connection")
+}
+
+func printGroups(hub *Hub) {
+	for _, group := range hub.Groups {
+		c, err := json.Marshal(group.Clients)
+		if err != nil {
+			logrus.Error("print failed: ", err)
+		}
+		logrus.Infof("groupId: [%v], group clients: %v", group.Id, string(c))
+	}
 }
