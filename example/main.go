@@ -45,7 +45,7 @@ func main() {
 		}
 	})
 
-	router.POST("/doWork", func(ctx *gin.Context) {
+	router.POST("/sendMessage", func(ctx *gin.Context) {
 		groupId := ctx.GetHeader("group_id")
 		if strings.TrimSpace(groupId) == "" {
 			ctx.JSON(http.StatusBadRequest, "missing group_id from headers")
