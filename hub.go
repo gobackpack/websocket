@@ -31,9 +31,6 @@ type Hub struct {
 	BroadcastToGroup      chan *Frame
 	BroadcastToAllGroups  chan *Frame
 	BroadcastToConnection chan *Frame
-
-	ReadLock sync.Mutex
-	SendLock sync.Mutex
 }
 
 type Client struct {
@@ -43,11 +40,9 @@ type Client struct {
 	Connection       *websocketLib.Conn `json:"-"`
 	OnMessage        func([]byte) error `json:"-"`
 	OnError          func(err error)    `json:"-"`
-	StopListening    chan bool          `json:"-"`
 	StoppedListening chan bool          `json:"-"`
-
-	ReadLock sync.Mutex
-	SendLock sync.Mutex
+	ReadLock         sync.Mutex         `json:"-"`
+	SendLock         sync.Mutex         `json:"-"`
 }
 
 type Group struct {
@@ -117,7 +112,6 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		GroupId:          groupId,
 		ConnectionId:     uuid.New().String(),
 		Connection:       conn,
-		StopListening:    make(chan bool),
 		StoppedListening: make(chan bool),
 	}
 
@@ -305,10 +299,7 @@ func (hub *Hub) broadcastToConnection(frame *Frame) {
 
 				if errBrokenPipe(err) {
 					logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", frame.ConnectionId, frame.GroupId)
-					hub.Disconnect <- &Client{
-						GroupId:      frame.GroupId,
-						ConnectionId: frame.ConnectionId,
-					}
+					hub.Disconnect <- client
 				}
 
 				return
