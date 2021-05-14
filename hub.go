@@ -47,12 +47,6 @@ type Group struct {
 	Clients []*Client
 }
 
-type Sub struct {
-	GroupId      string
-	ConnectionId string
-	Connection   *websocketLib.Conn
-}
-
 type Frame struct {
 	GroupId      string    `json:"group_id"`
 	ConnectionId string    `json:"connection_id"`
@@ -146,7 +140,7 @@ func (hub *Hub) ReadMessages(client *Client) {
 		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
 			client.GroupId, client.ConnectionId)
 
-		hub.Disconnect <- client
+		//hub.Disconnect <- client
 	}()
 
 	for {
@@ -270,9 +264,6 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 			}
 		}
 	}
-
-	logrus.Info("after disconnect::")
-	printGroups(hub)
 }
 
 func (hub *Hub) broadcastToGroup(frame *Frame) {
