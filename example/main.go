@@ -35,12 +35,12 @@ func main() {
 	done := make(chan bool)
 	cancelled := hub.ListenConnections(done)
 
-	router.GET("/ws/:connectionId", func(ctx *gin.Context) {
-		connectionId := ctx.Param("connectionId")
+	router.GET("/ws/:groupId", func(ctx *gin.Context) {
+		groupId := ctx.Param("groupId")
 
-		_, err := hub.EstablishConnection(ctx.Writer, ctx.Request, connectionId)
+		_, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId)
 		if err != nil {
-			logrus.Errorf("failed to establish connection -> %s", connectionId)
+			logrus.Errorf("failed to establish connection with groupId -> %s", groupId)
 			return
 		}
 	})
@@ -69,11 +69,11 @@ func main() {
 			}
 		}()
 
-		connId := ctx.GetHeader("connection_id")
-		if strings.TrimSpace(connId) != "" {
+		connectionId := ctx.GetHeader("connection_id")
+		if strings.TrimSpace(connectionId) != "" {
 			go func() {
 				for i := 0; i < 50; i++ {
-					hub.SendToConnectionId(groupId, connId, []byte(fmt.Sprintf("groupId [%v] connectionId [%v]", groupId, connId)))
+					hub.SendToConnectionId(groupId, connectionId, []byte(fmt.Sprintf("groupId [%v] connectionId [%v]", groupId, connectionId)))
 					wg.Done()
 				}
 			}()
