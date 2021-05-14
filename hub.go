@@ -27,9 +27,11 @@ type Hub struct {
 	Connect               chan *Client
 	Disconnect            chan *Client
 	Groups                []*Group
+
 	BroadcastToGroup      chan *Frame
 	BroadcastToAllGroups  chan *Frame
 	BroadcastToConnection chan *Frame
+
 	ReadLock              sync.Mutex
 	SendLock              sync.Mutex
 }
@@ -145,7 +147,6 @@ func (hub *Hub) ReadMessages(client *Client) {
 
 	for {
 		_, msg, err := hub.read(client.Connection)
-
 		if err != nil {
 			client.OnError(err)
 			break
