@@ -169,27 +169,6 @@ func (hub *Hub) SendToConnectionId(groupId string, connectionId string, msg []by
 	hub.BroadcastToConnection <- frame
 }
 
-func (client *Client) readMessages() {
-	defer func() {
-		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
-			client.GroupId, client.ConnectionId)
-
-		client.StoppedListening <- true
-	}()
-
-	for {
-		_, msg, err := client.read()
-		if err != nil {
-			client.OnError(err)
-			break
-		}
-
-		if err := client.OnMessage(msg); err != nil {
-			client.OnError(err)
-		}
-	}
-}
-
 func (hub *Hub) assignConnectionToGroup(client *Client) {
 	var group *Group
 
@@ -308,6 +287,49 @@ func (hub *Hub) broadcastToConnection(frame *Frame) {
 	}
 }
 
+func (hub *Hub) client(groupId, connectionId string) *Client {
+	if group := hub.group(groupId); group != nil {
+		for _, client := range group.Clients {
+			if client.ConnectionId == connectionId {
+				return client
+			}
+		}
+	}
+
+	return nil
+}
+
+func (hub *Hub) group(groupId string) *Group {
+	for _, group := range hub.Groups {
+		if group.Id == groupId {
+			return group
+		}
+	}
+
+	return nil
+}
+
+func (client *Client) readMessages() {
+	defer func() {
+		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
+			client.GroupId, client.ConnectionId)
+
+		client.StoppedListening <- true
+	}()
+
+	for {
+		_, msg, err := client.read()
+		if err != nil {
+			client.OnError(err)
+			break
+		}
+
+		if err := client.OnMessage(msg); err != nil {
+			client.OnError(err)
+		}
+	}
+}
+
 func (client *Client) read() (int, []byte, error) {
 	client.ReadLock.Lock()
 	t, p, err := client.Connection.ReadMessage()
@@ -322,28 +344,6 @@ func (client *Client) write(messageType int, data []byte) error {
 	client.SendLock.Unlock()
 
 	return err
-}
-
-func (hub *Hub) group(groupId string) *Group {
-	for _, group := range hub.Groups {
-		if group.Id == groupId {
-			return group
-		}
-	}
-
-	return nil
-}
-
-func (hub *Hub) client(groupId, connectionId string) *Client {
-	if group := hub.group(groupId); group != nil {
-		for _, client := range group.Clients {
-			if client.ConnectionId == connectionId {
-				return client
-			}
-		}
-	}
-
-	return nil
 }
 
 func (client *Client) onMessage(msg []byte) error {
