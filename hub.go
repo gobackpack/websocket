@@ -26,10 +26,12 @@ var upgrader = websocketLib.Upgrader{
 type Hub struct {
 	Connect               chan *Client
 	Disconnect            chan *Client
-	Clients               map[string]map[string]*websocketLib.Conn
+	Groups                []*Group
+
 	BroadcastToGroup      chan *Frame
 	BroadcastToAllGroups  chan *Frame
 	BroadcastToConnection chan *Frame
+
 	ReadLock              sync.Mutex
 	SendLock              sync.Mutex
 }
@@ -37,9 +39,14 @@ type Hub struct {
 type Client struct {
 	GroupId      string
 	ConnectionId string
-	Connection   *websocketLib.Conn
-	OnMessage    func([]byte) error
-	OnError      func(err error)
+	Connection   *websocketLib.Conn `json:"-"`
+	OnMessage    func([]byte) error `json:"-"`
+	OnError      func(err error)    `json:"-"`
+}
+
+type Group struct {
+	Id      string
+	Clients []*Client
 }
 
 type Frame struct {
@@ -53,7 +60,7 @@ func NewHub() *Hub {
 	return &Hub{
 		Connect:               make(chan *Client),
 		Disconnect:            make(chan *Client),
-		Clients:               make(map[string]map[string]*websocketLib.Conn, 0),
+		Groups:                make([]*Group, 0),
 		BroadcastToGroup:      make(chan *Frame, 0),
 		BroadcastToAllGroups:  make(chan *Frame, 0),
 		BroadcastToConnection: make(chan *Frame, 0),
@@ -71,7 +78,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 		for {
 			select {
 			case client := <-hub.Connect:
-				hub.assignConnectionToGroup(client.GroupId, client.ConnectionId, client.Connection)
+				hub.assignConnectionToGroup(client)
 				break
 			case client := <-hub.Disconnect:
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
@@ -116,7 +123,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 
 	hub.Connect <- client
 
-	go hub.ReadMessages(client)
+	go hub.readMessages(client)
 
 	return client, nil
 }
@@ -128,28 +135,6 @@ func (hub *Hub) DisconnectFromGroup(groupId string, connectionId string) {
 	}
 
 	hub.Disconnect <- client
-}
-
-func (hub *Hub) ReadMessages(client *Client) {
-	defer func() {
-		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
-			client.GroupId, client.ConnectionId)
-
-		hub.Disconnect <- client
-	}()
-
-	for {
-		_, msg, err := hub.read(client.Connection)
-
-		if err != nil {
-			client.OnError(err)
-			break
-		}
-
-		if err := client.OnMessage(msg); err != nil {
-			client.OnError(err)
-		}
-	}
 }
 
 func (hub *Hub) SendToGroup(groupId string, msg []byte) {
@@ -182,6 +167,27 @@ func (hub *Hub) SendToConnectionId(groupId string, connectionId string, msg []by
 	hub.BroadcastToConnection <- frame
 }
 
+func (hub *Hub) readMessages(client *Client) {
+	defer func() {
+		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
+			client.GroupId, client.ConnectionId)
+
+		//hub.Disconnect <- client
+	}()
+
+	for {
+		_, msg, err := hub.read(client.Connection)
+		if err != nil {
+			client.OnError(err)
+			break
+		}
+
+		if err := client.OnMessage(msg); err != nil {
+			client.OnError(err)
+		}
+	}
+}
+
 func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {
 	hub.ReadLock.Lock()
 	t, p, err := conn.ReadMessage()
@@ -198,39 +204,66 @@ func (hub *Hub) write(conn *websocketLib.Conn, messageType int, data []byte) err
 	return err
 }
 
-func (hub *Hub) group(groupId string) map[string]*websocketLib.Conn {
-	return hub.Clients[groupId]
-}
-
-func (hub *Hub) connection(groupId, connectionId string) *websocketLib.Conn {
-	if hub.group(groupId) != nil {
-		return hub.Clients[groupId][connectionId]
+func (hub *Hub) group(groupId string) *Group {
+	for _, group := range hub.Groups {
+		if group.Id == groupId {
+			return group
+		}
 	}
 
 	return nil
 }
 
-func (hub *Hub) assignConnectionToGroup(groupId string, connectionId string, conn *websocketLib.Conn) {
-	hub.createGroupIfNotExists(groupId)
-	hub.Clients[groupId][connectionId] = conn
-	logrus.Infof("client [%v] connected to group [%v]", connectionId, groupId)
+func (hub *Hub) connection(groupId, connectionId string) *websocketLib.Conn {
+	if group := hub.group(groupId); group != nil {
+		for _, client := range group.Clients {
+			if client.ConnectionId == connectionId {
+				return client.Connection
+			}
+		}
+	}
+
+	return nil
+}
+
+func (hub *Hub) assignConnectionToGroup(client *Client) {
+	var group *Group
+
+	if group = hub.group(client.GroupId); group == nil {
+		group = &Group{
+			Id:      client.GroupId,
+			Clients: make([]*Client, 0),
+		}
+
+		hub.Groups = append(hub.Groups, group)
+	}
+
+	group.Clients = append(group.Clients, client)
+
+	logrus.Infof("client [%v] connected to group [%v]", client.ConnectionId, client.GroupId)
 }
 
 func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 	if conn := hub.connection(groupId, connectionId); conn != nil {
-		if err := conn.Close(); err != nil {
-			logrus.Errorf("client [%v] failed to disconnect from group [%v]", connectionId, groupId)
+		// if there is error that connection is already closed, ignore it, continue with further function processing
+		if err := conn.Close(); err != nil && !errConnClosed(err) {
+			// but if there is error and connection is not already closed, stop further function processing
+			// it means connection close failed, something went wrong!
+			logrus.Errorf("client [%v] from group [%v] failed to close websocket connection: [%v]", connectionId, groupId, err)
 			return
 		}
 
-		delete(hub.group(groupId), connectionId)
-		logrus.Warnf("client [%v] disconnected from group [%v]", connectionId, groupId)
-	}
-}
+		if group := hub.group(groupId); group != nil {
+			for i := 0; i < len(group.Clients); i++ {
+				if group.Clients[i].ConnectionId == connectionId {
+					copy(group.Clients[i:], group.Clients[i+1:])
+					group.Clients[len(group.Clients)-1] = nil
+					group.Clients = group.Clients[:len(group.Clients)-1]
 
-func (hub *Hub) createGroupIfNotExists(groupId string) {
-	if hub.group(groupId) == nil {
-		hub.Clients[groupId] = make(map[string]*websocketLib.Conn, 0)
+					logrus.Warnf("client [%v] disconnected from group [%v]", connectionId, groupId)
+				}
+			}
+		}
 	}
 }
 
@@ -242,29 +275,26 @@ func (hub *Hub) broadcastToGroup(frame *Frame) {
 			return
 		}
 
-		for connId, conn := range group {
-			go func(connId string, conn *websocketLib.Conn) {
-				if err := hub.write(conn, TextMessage, b); err != nil {
+		for _, client := range group.Clients {
+			go func(client *Client) {
+				if err := hub.write(client.Connection, TextMessage, b); err != nil {
 					logrus.Error("BroadcastToGroup failed: ", err)
 
 					if errBrokenPipe(err) {
-						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connId, frame.GroupId)
-						hub.Disconnect <- &Client{
-							GroupId:      frame.GroupId,
-							ConnectionId: connId,
-						}
+						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
+						hub.Disconnect <- client
 					}
 
 					return
 				}
-			}(connId, conn)
+			}(client)
 		}
 	}
 }
 
 func (hub *Hub) broadcastToAllGroups(frame *Frame) {
-	for groupId, connections := range hub.Clients {
-		frame.GroupId = groupId
+	for _, group := range hub.Groups {
+		frame.GroupId = group.Id
 
 		b, err := json.Marshal(frame)
 		if err != nil {
@@ -272,22 +302,19 @@ func (hub *Hub) broadcastToAllGroups(frame *Frame) {
 			break
 		}
 
-		for connId, conn := range connections {
-			go func(connId string, conn *websocketLib.Conn) {
-				if err := hub.write(conn, TextMessage, b); err != nil {
+		for _, client := range group.Clients {
+			go func(client *Client) {
+				if err := hub.write(client.Connection, TextMessage, b); err != nil {
 					logrus.Error("BroadcastToAllGroups failed: ", err)
 
 					if errBrokenPipe(err) {
-						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connId, frame.GroupId)
-						hub.Disconnect <- &Client{
-							GroupId:      frame.GroupId,
-							ConnectionId: connId,
-						}
+						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
+						hub.Disconnect <- client
 					}
 
 					return
 				}
-			}(connId, conn)
+			}(client)
 		}
 	}
 }
@@ -329,4 +356,18 @@ func (client *Client) onError(err error) {
 
 func errBrokenPipe(err error) bool {
 	return strings.Contains(err.Error(), "broken pipe")
+}
+
+func errConnClosed(err error) bool {
+	return strings.Contains(err.Error(), "use of closed network connection")
+}
+
+func printGroups(hub *Hub) {
+	for _, group := range hub.Groups {
+		c, err := json.Marshal(group.Clients)
+		if err != nil {
+			logrus.Error("print failed: ", err)
+		}
+		logrus.Infof("groupId: [%v], group clients: %v", group.Id, string(c))
+	}
 }
