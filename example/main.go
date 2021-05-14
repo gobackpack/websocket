@@ -98,6 +98,10 @@ func main() {
 		hub.DisconnectFromGroup(groupId, connId)
 	})
 
+	router.GET("/connections", func(ctx *gin.Context) {
+		ctx.JSON(http.StatusOK, hub.Groups)
+	})
+
 	httpServe(router, "", "8080")
 
 	close(done)

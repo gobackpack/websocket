@@ -40,9 +40,10 @@ type Client struct {
 	GroupId      string
 	ConnectionId string
 
-	Connection *websocketLib.Conn `json:"-"`
-	OnMessage  func([]byte) error `json:"-"`
-	OnError    func(err error)    `json:"-"`
+	Connection       *websocketLib.Conn `json:"-"`
+	OnMessage        func([]byte) error `json:"-"`
+	OnError          func(err error)    `json:"-"`
+	StoppedListening chan bool          `json:"-"`
 }
 
 type Group struct {
@@ -109,9 +110,10 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 	}
 
 	client := &Client{
-		GroupId:      groupId,
-		ConnectionId: uuid.New().String(),
-		Connection:   conn,
+		GroupId:          groupId,
+		ConnectionId:     uuid.New().String(),
+		Connection:       conn,
+		StoppedListening: make(chan bool),
 	}
 
 	if client.OnMessage == nil {
@@ -172,6 +174,8 @@ func (hub *Hub) readMessages(client *Client) {
 	defer func() {
 		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
 			client.GroupId, client.ConnectionId)
+
+		client.StoppedListening <- true
 	}()
 
 	for {
@@ -215,6 +219,10 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 					logrus.Errorf("client [%v] from group [%v] failed to close websocket connection: [%v]", connectionId, groupId, err)
 					return
 				}
+
+				<-group.Clients[i].StoppedListening
+
+				logrus.Warnf("client [%v] closed websocket connection from group [%v]", connectionId, groupId)
 
 				copy(group.Clients[i:], group.Clients[i+1:])
 				group.Clients[len(group.Clients)-1] = nil
