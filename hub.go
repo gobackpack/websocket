@@ -175,7 +175,7 @@ func (hub *Hub) readMessages(client *Client) {
 		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
 			client.GroupId, client.ConnectionId)
 
-		client.StoppedListening <- true
+		//client.StoppedListening <- true
 	}()
 
 	for {
@@ -209,6 +209,8 @@ func (hub *Hub) assignConnectionToGroup(client *Client) {
 }
 
 func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
+	printGroups(hub)
+
 	if group := hub.group(groupId); group != nil {
 		for i := 0; i < len(group.Clients); i++ {
 			if group.Clients[i].ConnectionId == connectionId {
@@ -220,7 +222,7 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 					return
 				}
 
-				<-group.Clients[i].StoppedListening
+				//<-group.Clients[i].StoppedListening
 
 				logrus.Warnf("client [%v] closed websocket connection from group [%v]", connectionId, groupId)
 
