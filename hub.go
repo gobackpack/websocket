@@ -187,44 +187,6 @@ func (hub *Hub) readMessages(client *Client) {
 	}
 }
 
-func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {
-	hub.ReadLock.Lock()
-	t, p, err := conn.ReadMessage()
-	hub.ReadLock.Unlock()
-
-	return t, p, err
-}
-
-func (hub *Hub) write(conn *websocketLib.Conn, messageType int, data []byte) error {
-	hub.SendLock.Lock()
-	err := conn.WriteMessage(messageType, data)
-	hub.SendLock.Unlock()
-
-	return err
-}
-
-func (hub *Hub) group(groupId string) *Group {
-	for _, group := range hub.Groups {
-		if group.Id == groupId {
-			return group
-		}
-	}
-
-	return nil
-}
-
-func (hub *Hub) connection(groupId, connectionId string) *websocketLib.Conn {
-	if group := hub.group(groupId); group != nil {
-		for _, client := range group.Clients {
-			if client.ConnectionId == connectionId {
-				return client.Connection
-			}
-		}
-	}
-
-	return nil
-}
-
 func (hub *Hub) assignConnectionToGroup(client *Client) {
 	var group *Group
 
@@ -340,6 +302,44 @@ func (hub *Hub) broadcastToConnection(frame *Frame) {
 			}
 		}()
 	}
+}
+
+func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {
+	hub.ReadLock.Lock()
+	t, p, err := conn.ReadMessage()
+	hub.ReadLock.Unlock()
+
+	return t, p, err
+}
+
+func (hub *Hub) write(conn *websocketLib.Conn, messageType int, data []byte) error {
+	hub.SendLock.Lock()
+	err := conn.WriteMessage(messageType, data)
+	hub.SendLock.Unlock()
+
+	return err
+}
+
+func (hub *Hub) group(groupId string) *Group {
+	for _, group := range hub.Groups {
+		if group.Id == groupId {
+			return group
+		}
+	}
+
+	return nil
+}
+
+func (hub *Hub) connection(groupId, connectionId string) *websocketLib.Conn {
+	if group := hub.group(groupId); group != nil {
+		for _, client := range group.Clients {
+			if client.ConnectionId == connectionId {
+				return client.Connection
+			}
+		}
+	}
+
+	return nil
 }
 
 func (client *Client) onMessage(msg []byte) error {
