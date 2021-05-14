@@ -43,7 +43,11 @@ type Client struct {
 	Connection       *websocketLib.Conn `json:"-"`
 	OnMessage        func([]byte) error `json:"-"`
 	OnError          func(err error)    `json:"-"`
+	StopListening    chan bool          `json:"-"`
 	StoppedListening chan bool          `json:"-"`
+
+	ReadLock sync.Mutex
+	SendLock sync.Mutex
 }
 
 type Group struct {
@@ -113,6 +117,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		GroupId:          groupId,
 		ConnectionId:     uuid.New().String(),
 		Connection:       conn,
+		StopListening:    make(chan bool),
 		StoppedListening: make(chan bool),
 	}
 
@@ -126,7 +131,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 
 	hub.Connect <- client
 
-	go hub.readMessages(client)
+	go client.readMessages()
 
 	return client, nil
 }
@@ -170,16 +175,16 @@ func (hub *Hub) SendToConnectionId(groupId string, connectionId string, msg []by
 	hub.BroadcastToConnection <- frame
 }
 
-func (hub *Hub) readMessages(client *Client) {
+func (client *Client) readMessages() {
 	defer func() {
 		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
 			client.GroupId, client.ConnectionId)
 
-		//client.StoppedListening <- true
+		client.StoppedListening <- true
 	}()
 
 	for {
-		_, msg, err := hub.read(client.Connection)
+		_, msg, err := client.read()
 		if err != nil {
 			client.OnError(err)
 			break
@@ -209,8 +214,6 @@ func (hub *Hub) assignConnectionToGroup(client *Client) {
 }
 
 func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
-	printGroups(hub)
-
 	if group := hub.group(groupId); group != nil {
 		for i := 0; i < len(group.Clients); i++ {
 			if group.Clients[i].ConnectionId == connectionId {
@@ -222,7 +225,7 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 					return
 				}
 
-				//<-group.Clients[i].StoppedListening
+				<-group.Clients[i].StoppedListening
 
 				logrus.Warnf("client [%v] closed websocket connection from group [%v]", connectionId, groupId)
 
@@ -246,7 +249,7 @@ func (hub *Hub) broadcastToGroup(frame *Frame) {
 
 		for _, client := range group.Clients {
 			go func(client *Client) {
-				if err := hub.write(client.Connection, TextMessage, b); err != nil {
+				if err := client.write(TextMessage, b); err != nil {
 					logrus.Error("BroadcastToGroup failed: ", err)
 
 					if errBrokenPipe(err) {
@@ -273,7 +276,7 @@ func (hub *Hub) broadcastToAllGroups(frame *Frame) {
 
 		for _, client := range group.Clients {
 			go func(client *Client) {
-				if err := hub.write(client.Connection, TextMessage, b); err != nil {
+				if err := client.write(TextMessage, b); err != nil {
 					logrus.Error("BroadcastToAllGroups failed: ", err)
 
 					if errBrokenPipe(err) {
@@ -289,7 +292,7 @@ func (hub *Hub) broadcastToAllGroups(frame *Frame) {
 }
 
 func (hub *Hub) broadcastToConnection(frame *Frame) {
-	if conn := hub.connection(frame.GroupId, frame.ConnectionId); conn != nil {
+	if client := hub.client(frame.GroupId, frame.ConnectionId); client != nil {
 		b, err := json.Marshal(frame)
 		if err != nil {
 			logrus.Error("failed to marshal hub message: ", err)
@@ -297,7 +300,7 @@ func (hub *Hub) broadcastToConnection(frame *Frame) {
 		}
 
 		go func() {
-			if err := hub.write(conn, TextMessage, b); err != nil {
+			if err := client.write(TextMessage, b); err != nil {
 				logrus.Error("BroadcastToConnection failed: ", err)
 
 				if errBrokenPipe(err) {
@@ -314,18 +317,18 @@ func (hub *Hub) broadcastToConnection(frame *Frame) {
 	}
 }
 
-func (hub *Hub) read(conn *websocketLib.Conn) (int, []byte, error) {
-	hub.ReadLock.Lock()
-	t, p, err := conn.ReadMessage()
-	hub.ReadLock.Unlock()
+func (client *Client) read() (int, []byte, error) {
+	client.ReadLock.Lock()
+	t, p, err := client.Connection.ReadMessage()
+	client.ReadLock.Unlock()
 
 	return t, p, err
 }
 
-func (hub *Hub) write(conn *websocketLib.Conn, messageType int, data []byte) error {
-	hub.SendLock.Lock()
-	err := conn.WriteMessage(messageType, data)
-	hub.SendLock.Unlock()
+func (client *Client) write(messageType int, data []byte) error {
+	client.SendLock.Lock()
+	err := client.Connection.WriteMessage(messageType, data)
+	client.SendLock.Unlock()
 
 	return err
 }
@@ -340,11 +343,11 @@ func (hub *Hub) group(groupId string) *Group {
 	return nil
 }
 
-func (hub *Hub) connection(groupId, connectionId string) *websocketLib.Conn {
+func (hub *Hub) client(groupId, connectionId string) *Client {
 	if group := hub.group(groupId); group != nil {
 		for _, client := range group.Clients {
 			if client.ConnectionId == connectionId {
-				return client.Connection
+				return client
 			}
 		}
 	}
