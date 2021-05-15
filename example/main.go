@@ -26,7 +26,7 @@ func main() {
 
 	pprof.Register(router)
 
-	router.GET("/join/:connectionId", func(c *gin.Context) {
+	router.GET("/join/:groupId", func(c *gin.Context) {
 		c.HTML(200, "index.html", nil)
 	})
 
