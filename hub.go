@@ -130,7 +130,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 	return client, nil
 }
 
-func (hub *Hub) DisconnectFromGroup(groupId string, connectionId string) {
+func (hub *Hub) DisconnectFromGroup(groupId, connectionId string) {
 	client := &Client{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
@@ -158,7 +158,7 @@ func (hub *Hub) SendToAllGroups(msg []byte) {
 	hub.BroadcastToAllGroups <- frame
 }
 
-func (hub *Hub) SendToConnectionId(groupId string, connectionId string, msg []byte) {
+func (hub *Hub) SendToConnectionId(groupId, connectionId string, msg []byte) {
 	frame := &Frame{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
