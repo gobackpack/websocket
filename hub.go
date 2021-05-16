@@ -61,10 +61,10 @@ type Frame struct {
 
 func NewHub() *Hub {
 	return &Hub{
+		Groups:                   make([]*Group, 0),
 		connect:                  make(chan *Client),
 		disconnect:               make(chan *Client),
 		clientGoingAway:          make(chan *Client),
-		Groups:                   make([]*Group, 0),
 		broadcastToGroup:         make(chan *Frame, 0),
 		broadcastToAllGroups:     make(chan *Frame, 0),
 		broadcastToConnection:    make(chan *Frame, 0),
