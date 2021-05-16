@@ -120,7 +120,7 @@ func main() {
 	// app 1
 	ticker := tick.NewTicker(hub)
 	router.GET("/ticks/start", func(ctx *gin.Context) {
-		go ticker.Start()
+		ticker.Start()
 	})
 	router.GET("/ticks/stop", func(ctx *gin.Context) {
 		ticker.Stop()
@@ -129,7 +129,7 @@ func main() {
 	// app 2
 	trader := trade.NewTrader(hub)
 	router.GET("/trader/start", func(ctx *gin.Context) {
-		go trader.Start()
+		trader.Start()
 	})
 	router.GET("/trader/stop", func(ctx *gin.Context) {
 		trader.Stop()

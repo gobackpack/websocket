@@ -33,65 +33,67 @@ type Trade struct {
 }
 
 func (trader *Trader) Start() {
-	conn, _, err := websocketLib.DefaultDialer.Dial("wss://ws.finnhub.io?token=c2gi49iad3ie55jbbfug", nil)
-	if err != nil {
-		logrus.Fatal("connection to finnhub failed: ", err)
-	}
-	defer func() {
-		if err := conn.Close(); err != nil {
-			logrus.Error("failed to close connection from finnhub: ", err)
+	go func() {
+		conn, _, err := websocketLib.DefaultDialer.Dial("wss://ws.finnhub.io?token=c2gi49iad3ie55jbbfug", nil)
+		if err != nil {
+			logrus.Fatal("connection to finnhub failed: ", err)
 		}
-
-		logrus.Warn("closed connection to finnhub")
-	}()
-
-	symbols := []string{"BINANCE:BTCUSDT", "IC MARKETS:1"}
-	for _, s := range symbols {
-		msg, _ := json.Marshal(map[string]interface{}{"type": "subscribe", "symbol": s})
-		if err := conn.WriteMessage(websocketLib.TextMessage, msg); err != nil {
-			logrus.Error("subscribe to finnhub failed: ", err)
-		}
-	}
-
-	for {
-		select {
-		case <-trader.StopListening:
-			return
-		default:
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				logrus.Fatal("subscription failed: ", err)
+		defer func() {
+			if err := conn.Close(); err != nil {
+				logrus.Error("failed to close connection from finnhub: ", err)
 			}
 
-			var sub *Subscription
-			if err := json.Unmarshal(msg, &sub); err != nil {
-				logrus.Error(err)
-				continue
+			logrus.Warn("closed connection to finnhub")
+		}()
+
+		symbols := []string{"BINANCE:BTCUSDT", "IC MARKETS:1"}
+		for _, s := range symbols {
+			msg, _ := json.Marshal(map[string]interface{}{"type": "subscribe", "symbol": s})
+			if err := conn.WriteMessage(websocketLib.TextMessage, msg); err != nil {
+				logrus.Error("subscribe to finnhub failed: ", err)
 			}
+		}
 
-			sort.Slice(sub.Data, func(i, j int) bool {
-				return sub.Data[i].T < sub.Data[j].T
-			})
-
-			for _, s := range sub.Data {
-				payload := &struct {
-					Symbol string
-					Price  float32
-				}{
-					Symbol: s.S,
-					Price:  s.P,
+		for {
+			select {
+			case <-trader.StopListening:
+				return
+			default:
+				_, msg, err := conn.ReadMessage()
+				if err != nil {
+					logrus.Fatal("subscription failed: ", err)
 				}
 
-				b, err := json.Marshal(payload)
-				if err != nil {
+				var sub *Subscription
+				if err := json.Unmarshal(msg, &sub); err != nil {
 					logrus.Error(err)
 					continue
 				}
 
-				trader.Hub.SendToAllGroups(b)
+				sort.Slice(sub.Data, func(i, j int) bool {
+					return sub.Data[i].T < sub.Data[j].T
+				})
+
+				for _, s := range sub.Data {
+					payload := &struct {
+						Symbol string
+						Price  float32
+					}{
+						Symbol: s.S,
+						Price:  s.P,
+					}
+
+					b, err := json.Marshal(payload)
+					if err != nil {
+						logrus.Error(err)
+						continue
+					}
+
+					trader.Hub.SendToAllGroups(b)
+				}
 			}
 		}
-	}
+	}()
 }
 
 func (trader *Trader) Stop() {

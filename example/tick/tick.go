@@ -19,17 +19,19 @@ func NewTicker(hub *websocket.Hub) *Ticker {
 }
 
 func (ticker *Ticker) Start() {
-	count := 0
-	for {
-		select {
-		case <-time.After(time.Second):
-			ticker.Hub.SendToAllGroups([]byte(fmt.Sprint(count)))
-			count++
-			break
-		case <-ticker.StopTick:
-			return
+	go func() {
+		count := 0
+		for {
+			select {
+			case <-time.After(time.Second):
+				ticker.Hub.SendToAllGroups([]byte(fmt.Sprint(count)))
+				count++
+				break
+			case <-ticker.StopTick:
+				return
+			}
 		}
-	}
+	}()
 }
 
 func (ticker *Ticker) Stop() {
