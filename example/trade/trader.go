@@ -5,7 +5,6 @@ import (
 	"github.com/gobackpack/websocket"
 	websocketLib "github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
-	"sort"
 )
 
 type Trader struct {
@@ -69,10 +68,6 @@ func (trader *Trader) Start() {
 					logrus.Error(err)
 					continue
 				}
-
-				sort.Slice(sub.Data, func(i, j int) bool {
-					return sub.Data[i].T < sub.Data[j].T
-				})
 
 				for _, s := range sub.Data {
 					payload := &struct {
