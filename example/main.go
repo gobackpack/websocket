@@ -50,7 +50,9 @@ func main() {
 		//}
 
 		client.OnMessage = func(msg []byte) error {
-			hub.SendToOthersInGroup(groupId, client.ConnectionId, msg)
+			for i := 0; i < 50; i++ {
+				go hub.SendToOthersInGroup(groupId, client.ConnectionId, msg)
+			}
 			return nil
 		}
 	})
