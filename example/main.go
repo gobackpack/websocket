@@ -6,6 +6,7 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
+	"github.com/gobackpack/websocket/example/tick"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"net/http"
@@ -26,6 +27,8 @@ func main() {
 
 	pprof.Register(router)
 
+	// server frontend
+	// this url will call /ws/:groupId which is going to establish ws connection
 	router.GET("/join/:groupId", func(c *gin.Context) {
 		c.HTML(200, "index.html", nil)
 	})
@@ -35,6 +38,7 @@ func main() {
 	done := make(chan bool)
 	cancelled := hub.ListenConnections(done)
 
+	// establish ws connection
 	router.GET("/ws/:groupId", func(ctx *gin.Context) {
 		groupId := ctx.Param("groupId")
 
@@ -112,6 +116,14 @@ func main() {
 
 	router.GET("/connections", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, hub.Groups)
+	})
+
+	ticker := tick.NewTick(hub)
+	router.GET("/ticks/start", func(ctx *gin.Context) {
+		ticker.Start()
+	})
+	router.GET("/ticks/stop", func(ctx *gin.Context) {
+		ticker.Stop()
 	})
 
 	httpServe(router, "", "8080")
