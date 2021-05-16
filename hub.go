@@ -28,9 +28,10 @@ type Hub struct {
 	Disconnect chan *Client
 	Groups     []*Group
 
-	BroadcastToGroup      chan *Frame
-	BroadcastToAllGroups  chan *Frame
-	BroadcastToConnection chan *Frame
+	BroadcastToGroup         chan *Frame
+	BroadcastToAllGroups     chan *Frame
+	BroadcastToConnection    chan *Frame
+	BroadcastToOthersInGroup chan *Frame
 }
 
 type Client struct {
@@ -59,12 +60,13 @@ type Frame struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		Connect:               make(chan *Client),
-		Disconnect:            make(chan *Client),
-		Groups:                make([]*Group, 0),
-		BroadcastToGroup:      make(chan *Frame, 0),
-		BroadcastToAllGroups:  make(chan *Frame, 0),
-		BroadcastToConnection: make(chan *Frame, 0),
+		Connect:                  make(chan *Client),
+		Disconnect:               make(chan *Client),
+		Groups:                   make([]*Group, 0),
+		BroadcastToGroup:         make(chan *Frame, 0),
+		BroadcastToAllGroups:     make(chan *Frame, 0),
+		BroadcastToConnection:    make(chan *Frame, 0),
+		BroadcastToOthersInGroup: make(chan *Frame, 0),
 	}
 }
 
@@ -92,6 +94,9 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				break
 			case frame := <-hub.BroadcastToConnection:
 				hub.broadcastToConnection(frame)
+				break
+			case frame := <-hub.BroadcastToOthersInGroup:
+				hub.broadcastToOthersInGroup(frame)
 				break
 			case <-done:
 				return
@@ -167,6 +172,17 @@ func (hub *Hub) SendToConnectionId(groupId, connectionId string, msg []byte) {
 	}
 
 	hub.BroadcastToConnection <- frame
+}
+
+func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
+	frame := &Frame{
+		GroupId:      groupId,
+		ConnectionId: connectionId,
+		Content:      string(msg),
+		Time:         time.Now(),
+	}
+
+	hub.BroadcastToOthersInGroup <- frame
 }
 
 func (hub *Hub) assignConnectionToGroup(client *Client) {
@@ -284,6 +300,35 @@ func (hub *Hub) broadcastToConnection(frame *Frame) {
 				return
 			}
 		}()
+	}
+}
+
+func (hub *Hub) broadcastToOthersInGroup(frame *Frame) {
+	if group := hub.group(frame.GroupId); group != nil {
+		b, err := json.Marshal(frame)
+		if err != nil {
+			logrus.Error("failed to marshal hub message: ", err)
+			return
+		}
+
+		for _, client := range group.Clients {
+			if client.ConnectionId == frame.ConnectionId {
+				continue
+			}
+
+			go func(client *Client) {
+				if err := client.write(TextMessage, b); err != nil {
+					logrus.Error("broadcastToOthersInGroup failed: ", err)
+
+					if errBrokenPipe(err) {
+						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
+						hub.Disconnect <- client
+					}
+
+					return
+				}
+			}(client)
+		}
 	}
 }
 

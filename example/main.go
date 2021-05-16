@@ -44,8 +44,13 @@ func main() {
 			return
 		}
 
+		//client.OnMessage = func(msg []byte) error {
+		//	hub.SendToGroup(groupId, msg)
+		//	return nil
+		//}
+
 		client.OnMessage = func(msg []byte) error {
-			hub.SendToGroup(groupId, msg)
+			hub.SendToOthersInGroup(groupId, client.ConnectionId, msg)
 			return nil
 		}
 	})
