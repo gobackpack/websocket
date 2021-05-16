@@ -130,8 +130,6 @@ func main() {
 
 	close(done)
 	<-cancelled
-
-	logrus.Info("server exited")
 }
 
 func httpServe(router *gin.Engine, host, port string) {
@@ -163,5 +161,5 @@ func httpServe(router *gin.Engine, host, port string) {
 		logrus.Fatal("server forced to shutdown: ", err)
 	}
 
-	logrus.Warn("server exited")
+	logrus.Warn("http server exited")
 }
