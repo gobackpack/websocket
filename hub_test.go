@@ -45,8 +45,7 @@ func BenchmarkHub_SendToAllGroups(b *testing.B) {
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, err := hub.EstablishConnection(w, r, "1", "1")
 			if err != nil {
-				logrus.Errorf("failed to establish connection with groupId -> %s", "1")
-				return
+				b.Log(err)
 			}
 		}))
 
@@ -70,8 +69,7 @@ func BenchmarkHub_SendToConnectionId(b *testing.B) {
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, err := hub.EstablishConnection(w, r, "1", "1")
 			if err != nil {
-				logrus.Errorf("failed to establish connection with groupId -> %s", "1")
-				return
+				b.Log(err)
 			}
 		}))
 
@@ -95,8 +93,7 @@ func BenchmarkHub_SendToOthersInGroup(b *testing.B) {
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, err := hub.EstablishConnection(w, r, "1", "1")
 			if err != nil {
-				logrus.Errorf("failed to establish connection with groupId -> %s", "1")
-				return
+				b.Log(err)
 			}
 		}))
 
@@ -121,8 +118,7 @@ func BenchmarkHub_EstablishConnection(b *testing.B) {
 			for n := 0; n < b.N; n++ {
 				_, err := hub.EstablishConnection(w, r, "1", "1")
 				if err != nil {
-					logrus.Errorf("failed to establish connection with groupId -> %s", "1")
-					return
+					b.Log(err)
 				}
 			}
 		}))
