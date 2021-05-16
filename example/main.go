@@ -92,7 +92,7 @@ func main() {
 		}
 
 		wg := sync.WaitGroup{}
-		wg.Add(3)
+		wg.Add(2)
 
 		go func() {
 			for i := 0; i < 50; i++ {
@@ -110,6 +110,7 @@ func main() {
 
 		connectionId := ctx.GetHeader("connection_id")
 		if strings.TrimSpace(connectionId) != "" {
+			wg.Add(1)
 			go func() {
 				for i := 0; i < 50; i++ {
 					hub.SendToConnectionId(groupId, connectionId, []byte(fmt.Sprintf("groupId [%v] connectionId [%v]", groupId, connectionId)))
