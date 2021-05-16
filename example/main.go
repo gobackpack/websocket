@@ -95,21 +95,27 @@ func main() {
 		wg.Add(200)
 
 		for i := 0; i < 100; i++ {
-			go hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
-			wg.Done()
+			go func() {
+				hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
+				wg.Done()
+			}()
 		}
 
 		for i := 0; i < 100; i++ {
-			go hub.SendToAllGroups([]byte("all groups"))
-			wg.Done()
+			go func() {
+				hub.SendToAllGroups([]byte("all groups"))
+				wg.Done()
+			}()
 		}
 
 		connectionId := ctx.GetHeader("connection_id")
 		if strings.TrimSpace(connectionId) != "" {
 			wg.Add(100)
 			for i := 0; i < 100; i++ {
-				hub.SendToConnectionId(groupId, connectionId, []byte(fmt.Sprintf("groupId [%v] connectionId [%v]", groupId, connectionId)))
-				wg.Done()
+				go func() {
+					hub.SendToConnectionId(groupId, connectionId, []byte(fmt.Sprintf("groupId [%v] connectionId [%v]", groupId, connectionId)))
+					wg.Done()
+				}()
 			}
 		}
 
