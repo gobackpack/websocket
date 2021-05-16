@@ -29,7 +29,7 @@ func main() {
 	pprof.Register(router)
 
 	// serve frontend
-	// this url will call /ws/:groupId (frontend) which is going to establish ws connection
+	// this url will call /ws/:groupId (from frontend) which is going to establish ws connection
 	router.GET("/join/:groupId", func(c *gin.Context) {
 		c.HTML(200, "index.html", nil)
 	})
