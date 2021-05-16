@@ -32,7 +32,7 @@ type Hub struct {
 	BroadcastToConnection    chan *Frame
 	BroadcastToOthersInGroup chan *Frame
 
-	ClientClosedConn chan *Client
+	ClientGoingAway chan *Client
 }
 
 type Client struct {
@@ -63,7 +63,7 @@ func NewHub() *Hub {
 	return &Hub{
 		Connect:                  make(chan *Client),
 		Disconnect:               make(chan *Client),
-		ClientClosedConn:         make(chan *Client),
+		ClientGoingAway:          make(chan *Client),
 		Groups:                   make([]*Group, 0),
 		BroadcastToGroup:         make(chan *Frame, 0),
 		BroadcastToAllGroups:     make(chan *Frame, 0),
@@ -88,7 +88,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 			case client := <-hub.Disconnect: // user requested disconnect
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
-			case client := <-hub.ClientClosedConn: // unexpected disconnect (ex: user closed tab - going away err)
+			case client := <-hub.ClientGoingAway: // user closed tab - going away
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
 			case frame := <-hub.BroadcastToGroup:
@@ -135,7 +135,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 
 	hub.Connect <- client
 
-	go client.readMessages(hub.ClientClosedConn)
+	go client.readMessages(hub.ClientGoingAway)
 
 	return client, nil
 }
@@ -334,7 +334,7 @@ func (hub *Hub) group(groupId string) *Group {
 	return nil
 }
 
-func (client *Client) readMessages(unexpectedClose chan *Client) {
+func (client *Client) readMessages(clientGoingAway chan *Client) {
 	defer func() {
 		logrus.Warnf("client [%v] from group [%v] stopped reading websocket messages",
 			client.GroupId, client.ConnectionId)
@@ -348,7 +348,7 @@ func (client *Client) readMessages(unexpectedClose chan *Client) {
 			client.OnError(err)
 
 			if errGoingAway(err) {
-				unexpectedClose <- &Client{
+				clientGoingAway <- &Client{
 					GroupId:      client.GroupId,
 					ConnectionId: client.ConnectionId,
 				}
