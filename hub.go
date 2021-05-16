@@ -23,27 +23,28 @@ var upgrader = websocketLib.Upgrader{
 }
 
 type Hub struct {
-	Connect         chan *Client
-	Disconnect      chan *Client
-	ClientGoingAway chan *Client
-	Groups          []*Group
+	Groups []*Group
 
-	BroadcastToGroup         chan *Frame
-	BroadcastToAllGroups     chan *Frame
-	BroadcastToConnection    chan *Frame
-	BroadcastToOthersInGroup chan *Frame
+	connect                  chan *Client
+	disconnect               chan *Client
+	clientGoingAway          chan *Client
+	broadcastToGroup         chan *Frame
+	broadcastToAllGroups     chan *Frame
+	broadcastToConnection    chan *Frame
+	broadcastToOthersInGroup chan *Frame
 }
 
 type Client struct {
 	GroupId      string
 	ConnectionId string
 
-	Connection       *websocketLib.Conn `json:"-"`
-	OnMessage        func([]byte) error `json:"-"`
-	OnError          func(err error)    `json:"-"`
-	StoppedListening chan bool          `json:"-"`
-	ReadLock         sync.Mutex         `json:"-"`
-	SendLock         sync.Mutex         `json:"-"`
+	OnMessage func([]byte) error `json:"-"`
+	OnError   func(err error)    `json:"-"`
+
+	connection       *websocketLib.Conn
+	stoppedListening chan bool
+	rLock            sync.Mutex
+	sLock            sync.Mutex
 }
 
 type Group struct {
@@ -60,14 +61,14 @@ type Frame struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		Connect:                  make(chan *Client),
-		Disconnect:               make(chan *Client),
-		ClientGoingAway:          make(chan *Client),
+		connect:                  make(chan *Client),
+		disconnect:               make(chan *Client),
+		clientGoingAway:          make(chan *Client),
 		Groups:                   make([]*Group, 0),
-		BroadcastToGroup:         make(chan *Frame, 0),
-		BroadcastToAllGroups:     make(chan *Frame, 0),
-		BroadcastToConnection:    make(chan *Frame, 0),
-		BroadcastToOthersInGroup: make(chan *Frame, 0),
+		broadcastToGroup:         make(chan *Frame, 0),
+		broadcastToAllGroups:     make(chan *Frame, 0),
+		broadcastToConnection:    make(chan *Frame, 0),
+		broadcastToOthersInGroup: make(chan *Frame, 0),
 	}
 }
 
@@ -81,26 +82,26 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 
 		for {
 			select {
-			case client := <-hub.Connect:
+			case client := <-hub.connect:
 				hub.assignClientToGroup(client)
 				break
-			case client := <-hub.Disconnect: // user requested disconnect
+			case client := <-hub.disconnect: // user requested disconnect
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
-			case client := <-hub.ClientGoingAway: // user closed tab - going away
+			case client := <-hub.clientGoingAway: // user closed tab - going away
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
-			case frame := <-hub.BroadcastToGroup:
-				hub.broadcastToGroup(frame.GroupId, frame.Content)
+			case frame := <-hub.broadcastToGroup:
+				hub.sendToGroup(frame.GroupId, frame.Content)
 				break
-			case frame := <-hub.BroadcastToAllGroups:
-				hub.broadcastToAllGroups(frame.Content)
+			case frame := <-hub.broadcastToAllGroups:
+				hub.sendToAllGroups(frame.Content)
 				break
-			case frame := <-hub.BroadcastToConnection:
-				hub.broadcastToConnection(frame.GroupId, frame.ConnectionId, frame.Content)
+			case frame := <-hub.broadcastToConnection:
+				hub.sendToConnection(frame.GroupId, frame.ConnectionId, frame.Content)
 				break
-			case frame := <-hub.BroadcastToOthersInGroup:
-				hub.broadcastToOthersInGroup(frame.GroupId, frame.ConnectionId, frame.Content)
+			case frame := <-hub.broadcastToOthersInGroup:
+				hub.sendToOthersInGroup(frame.GroupId, frame.ConnectionId, frame.Content)
 				break
 			case <-done:
 				return
@@ -124,8 +125,8 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 	client := &Client{
 		GroupId:          groupId,
 		ConnectionId:     connectionId,
-		Connection:       conn,
-		StoppedListening: make(chan bool),
+		connection:       conn,
+		stoppedListening: make(chan bool),
 	}
 
 	if client.OnMessage == nil {
@@ -136,9 +137,9 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		client.OnError = client.onError
 	}
 
-	hub.Connect <- client
+	hub.connect <- client
 
-	go client.readMessages(hub.ClientGoingAway)
+	go client.readMessages(hub.clientGoingAway)
 
 	return client, nil
 }
@@ -149,7 +150,7 @@ func (hub *Hub) DisconnectFromGroup(groupId, connectionId string) {
 		ConnectionId: connectionId,
 	}
 
-	hub.Disconnect <- client
+	hub.disconnect <- client
 }
 
 func (hub *Hub) SendToGroup(groupId string, msg []byte) {
@@ -159,7 +160,7 @@ func (hub *Hub) SendToGroup(groupId string, msg []byte) {
 		Time:    time.Now(),
 	}
 
-	hub.BroadcastToGroup <- frame
+	hub.broadcastToGroup <- frame
 }
 
 func (hub *Hub) SendToAllGroups(msg []byte) {
@@ -168,7 +169,7 @@ func (hub *Hub) SendToAllGroups(msg []byte) {
 		Time:    time.Now(),
 	}
 
-	hub.BroadcastToAllGroups <- frame
+	hub.broadcastToAllGroups <- frame
 }
 
 func (hub *Hub) SendToConnectionId(groupId, connectionId string, msg []byte) {
@@ -179,7 +180,7 @@ func (hub *Hub) SendToConnectionId(groupId, connectionId string, msg []byte) {
 		Time:         time.Now(),
 	}
 
-	hub.BroadcastToConnection <- frame
+	hub.broadcastToConnection <- frame
 }
 
 func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
@@ -190,7 +191,7 @@ func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
 		Time:         time.Now(),
 	}
 
-	hub.BroadcastToOthersInGroup <- frame
+	hub.broadcastToOthersInGroup <- frame
 }
 
 func (hub *Hub) assignClientToGroup(client *Client) {
@@ -215,14 +216,14 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 		for i := 0; i < len(group.Clients); i++ {
 			if group.Clients[i].ConnectionId == connectionId {
 				// if there is error that connection is already closed, ignore it, continue with further function processing
-				if err := group.Clients[i].Connection.Close(); err != nil && !errConnClosed(err) {
+				if err := group.Clients[i].connection.Close(); err != nil && !errConnClosed(err) {
 					// but if there is error and connection is not already closed, stop further function processing
 					// it means connection close failed, something went wrong!
 					logrus.Errorf("client [%v] from group [%v] failed to close websocket connection: [%v]", connectionId, groupId, err)
 					return
 				}
 
-				<-group.Clients[i].StoppedListening
+				<-group.Clients[i].stoppedListening
 
 				logrus.Warnf("client [%v] closed websocket connection from group [%v]", connectionId, groupId)
 
@@ -236,16 +237,16 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 	}
 }
 
-func (hub *Hub) broadcastToGroup(groupId string, msg []byte) {
+func (hub *Hub) sendToGroup(groupId string, msg []byte) {
 	if group := hub.group(groupId); group != nil {
 		for _, client := range group.Clients {
 			go func(client *Client) {
 				if err := client.write(TextMessage, msg); err != nil {
-					logrus.Error("BroadcastToGroup failed: ", err)
+					logrus.Error("broadcastToGroup failed: ", err)
 
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
-						hub.Disconnect <- client
+						hub.disconnect <- client
 					}
 
 					return
@@ -255,17 +256,17 @@ func (hub *Hub) broadcastToGroup(groupId string, msg []byte) {
 	}
 }
 
-func (hub *Hub) broadcastToAllGroups(msg []byte) {
+func (hub *Hub) sendToAllGroups(msg []byte) {
 	for _, group := range hub.Groups {
 		// NOTE: if necessary each group can be processed concurrently
 		for _, client := range group.Clients {
 			go func(client *Client) {
 				if err := client.write(TextMessage, msg); err != nil {
-					logrus.Error("BroadcastToAllGroups failed: ", err)
+					logrus.Error("broadcastToAllGroups failed: ", err)
 
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
-						hub.Disconnect <- client
+						hub.disconnect <- client
 					}
 
 					return
@@ -275,15 +276,15 @@ func (hub *Hub) broadcastToAllGroups(msg []byte) {
 	}
 }
 
-func (hub *Hub) broadcastToConnection(groupId, connectionId string, msg []byte) {
+func (hub *Hub) sendToConnection(groupId, connectionId string, msg []byte) {
 	if client := hub.client(groupId, connectionId); client != nil {
 		go func() {
 			if err := client.write(TextMessage, msg); err != nil {
-				logrus.Error("BroadcastToConnection failed: ", err)
+				logrus.Error("broadcastToConnection failed: ", err)
 
 				if errBrokenPipe(err) {
 					logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
-					hub.Disconnect <- client
+					hub.disconnect <- client
 				}
 
 				return
@@ -292,7 +293,7 @@ func (hub *Hub) broadcastToConnection(groupId, connectionId string, msg []byte) 
 	}
 }
 
-func (hub *Hub) broadcastToOthersInGroup(groupId, connectionId string, msg []byte) {
+func (hub *Hub) sendToOthersInGroup(groupId, connectionId string, msg []byte) {
 	if group := hub.group(groupId); group != nil {
 		for _, client := range group.Clients {
 			if client.ConnectionId == connectionId {
@@ -305,7 +306,7 @@ func (hub *Hub) broadcastToOthersInGroup(groupId, connectionId string, msg []byt
 
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
-						hub.Disconnect <- client
+						hub.disconnect <- client
 					}
 
 					return
@@ -342,7 +343,7 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 		logrus.Warnf("client [%v] from group [%v] stopped reading websocket messages",
 			client.GroupId, client.ConnectionId)
 
-		client.StoppedListening <- true
+		client.stoppedListening <- true
 	}()
 
 	for {
@@ -366,17 +367,17 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 }
 
 func (client *Client) read() (int, []byte, error) {
-	client.ReadLock.Lock()
-	t, p, err := client.Connection.ReadMessage()
-	client.ReadLock.Unlock()
+	client.rLock.Lock()
+	t, p, err := client.connection.ReadMessage()
+	client.rLock.Unlock()
 
 	return t, p, err
 }
 
 func (client *Client) write(messageType int, data []byte) error {
-	client.SendLock.Lock()
-	err := client.Connection.WriteMessage(messageType, data)
-	client.SendLock.Unlock()
+	client.sLock.Lock()
+	err := client.connection.WriteMessage(messageType, data)
+	client.sLock.Unlock()
 
 	return err
 }
