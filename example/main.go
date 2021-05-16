@@ -55,6 +55,9 @@ func main() {
 			}
 			return nil
 		}
+
+		// NOTE: find your own way to return client.ConnectionId to frontend
+		// client.ConnectionId is required for manual /disconnect
 	})
 
 	// disconnect client from group
