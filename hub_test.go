@@ -1,14 +1,12 @@
 package websocket_test
 
 import (
-	"fmt"
 	"github.com/gobackpack/websocket"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
-
 
 func BenchmarkHub_SendToGroup(b *testing.B) {
 	hub := websocket.NewHub()
@@ -28,7 +26,7 @@ func BenchmarkHub_SendToGroup(b *testing.B) {
 	defer ts.Close()
 
 	for n := 0; n < b.N; n++ {
-		go hub.SendToGroup("1", []byte(fmt.Sprint(n)))
+		go hub.SendToGroup("1", []byte("123456789"))
 	}
 
 	close(done)
@@ -52,7 +50,7 @@ func BenchmarkHub_SendToAllGroups(b *testing.B) {
 	defer ts.Close()
 
 	for n := 0; n < b.N; n++ {
-		go hub.SendToAllGroups([]byte(fmt.Sprint(n)))
+		go hub.SendToAllGroups([]byte("123456789"))
 	}
 
 	close(done)
@@ -76,7 +74,7 @@ func BenchmarkHub_SendToConnectionId(b *testing.B) {
 	defer ts.Close()
 
 	for n := 0; n < b.N; n++ {
-		go hub.SendToConnectionId("1", "1", []byte(fmt.Sprint(n)))
+		go hub.SendToConnectionId("1", "1", []byte("123456789"))
 	}
 
 	close(done)
@@ -100,7 +98,7 @@ func BenchmarkHub_SendToOthersInGroup(b *testing.B) {
 	defer ts.Close()
 
 	for n := 0; n < b.N; n++ {
-		go hub.SendToOthersInGroup("1", "1", []byte(fmt.Sprint(n)))
+		go hub.SendToOthersInGroup("1", "1", []byte("123456789"))
 	}
 
 	close(done)
