@@ -7,6 +7,7 @@
             let conn;
             let msg = document.getElementById("msg");
             let log = document.getElementById("log");
+            let count = 0;
 
             function appendLog(item) {
                 let doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
@@ -41,8 +42,9 @@
                 conn.onmessage = function (evt) {
                     let messages = evt.data.split('\n');
                     for (let i = 0; i < messages.length; i++) {
+                        count++;
                         let item = document.createElement("div");
-                        item.innerText = messages[i];
+                        item.innerText = count + ' - ' + messages[i];
                         appendLog(item);
                     }
                 };
