@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
 	"github.com/gobackpack/websocket/example/tick"
+	"github.com/gobackpack/websocket/example/trade"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"net/http"
@@ -48,11 +49,6 @@ func main() {
 			return
 		}
 
-		//client.OnMessage = func(msg []byte) error {
-		//	hub.SendToGroup(groupId, msg)
-		//	return nil
-		//}
-
 		client.OnMessage = func(msg []byte) error {
 			for i := 0; i < 50; i++ {
 				go hub.SendToOthersInGroup(groupId, client.ConnectionId, msg)
@@ -61,6 +57,27 @@ func main() {
 		}
 	})
 
+	router.POST("/disconnect", func(ctx *gin.Context) {
+		groupId := ctx.GetHeader("group_id")
+		if strings.TrimSpace(groupId) == "" {
+			ctx.JSON(http.StatusBadRequest, "missing group_id from headers")
+			return
+		}
+
+		connId := ctx.GetHeader("connection_id")
+		if strings.TrimSpace(connId) == "" {
+			ctx.JSON(http.StatusBadRequest, "missing connection_id from headers")
+			return
+		}
+
+		hub.DisconnectFromGroup(groupId, connId)
+	})
+
+	router.GET("/connections", func(ctx *gin.Context) {
+		ctx.JSON(http.StatusOK, hub.Groups)
+	})
+
+	// examples
 	router.POST("/sendMessage", func(ctx *gin.Context) {
 		groupId := ctx.GetHeader("group_id")
 		if strings.TrimSpace(groupId) == "" {
@@ -98,32 +115,22 @@ func main() {
 		wg.Wait()
 	})
 
-	router.POST("/disconnect", func(ctx *gin.Context) {
-		groupId := ctx.GetHeader("group_id")
-		if strings.TrimSpace(groupId) == "" {
-			ctx.JSON(http.StatusBadRequest, "missing group_id from headers")
-			return
-		}
-
-		connId := ctx.GetHeader("connection_id")
-		if strings.TrimSpace(connId) == "" {
-			ctx.JSON(http.StatusBadRequest, "missing connection_id from headers")
-			return
-		}
-
-		hub.DisconnectFromGroup(groupId, connId)
-	})
-
-	router.GET("/connections", func(ctx *gin.Context) {
-		ctx.JSON(http.StatusOK, hub.Groups)
-	})
-
+	// app 1
 	ticker := tick.NewTicker(hub)
 	router.GET("/ticks/start", func(ctx *gin.Context) {
 		ticker.Start()
 	})
 	router.GET("/ticks/stop", func(ctx *gin.Context) {
 		ticker.Stop()
+	})
+
+	// app 2
+	trader := trade.NewTrader(hub)
+	router.GET("/trader/start", func(ctx *gin.Context) {
+		trader.Start()
+	})
+	router.GET("/trader/stop", func(ctx *gin.Context) {
+		trader.Stop()
 	})
 
 	httpServe(router, "", "8080")
