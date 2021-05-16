@@ -23,16 +23,15 @@ var upgrader = websocketLib.Upgrader{
 }
 
 type Hub struct {
-	Connect    chan *Client
-	Disconnect chan *Client
-	Groups     []*Group
+	Connect         chan *Client
+	Disconnect      chan *Client
+	ClientGoingAway chan *Client
+	Groups          []*Group
 
 	BroadcastToGroup         chan *Frame
 	BroadcastToAllGroups     chan *Frame
 	BroadcastToConnection    chan *Frame
 	BroadcastToOthersInGroup chan *Frame
-
-	ClientGoingAway chan *Client
 }
 
 type Client struct {
