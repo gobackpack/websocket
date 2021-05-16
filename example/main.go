@@ -118,7 +118,7 @@ func main() {
 		ctx.JSON(http.StatusOK, hub.Groups)
 	})
 
-	ticker := tick.NewTick(hub)
+	ticker := tick.NewTicker(hub)
 	router.GET("/ticks/start", func(ctx *gin.Context) {
 		ticker.Start()
 	})

@@ -11,7 +11,7 @@ type Ticker struct {
 	StopTick chan bool
 }
 
-func NewTick(hub *websocket.Hub) *Ticker {
+func NewTicker(hub *websocket.Hub) *Ticker {
 	return &Ticker{
 		Hub:      hub,
 		StopTick: make(chan bool),
