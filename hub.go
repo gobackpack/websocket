@@ -82,7 +82,7 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 		for {
 			select {
 			case client := <-hub.Connect:
-				hub.assignConnectionToGroup(client)
+				hub.assignClientToGroup(client)
 				break
 			case client := <-hub.Disconnect: // user requested disconnect
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
@@ -189,7 +189,7 @@ func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
 	hub.BroadcastToOthersInGroup <- frame
 }
 
-func (hub *Hub) assignConnectionToGroup(client *Client) {
+func (hub *Hub) assignClientToGroup(client *Client) {
 	var group *Group
 
 	if group = hub.group(client.GroupId); group == nil {
