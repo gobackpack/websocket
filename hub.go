@@ -54,7 +54,7 @@ type Group struct {
 type Frame struct {
 	GroupId      string    `json:"group_id"`
 	ConnectionId string    `json:"connection_id"`
-	Content      string    `json:"content"`
+	Content      []byte    `json:"content"`
 	Time         time.Time `json:"time"`
 }
 
@@ -87,16 +87,16 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
 			case frame := <-hub.BroadcastToGroup:
-				hub.broadcastToGroup(frame)
+				hub.broadcastToGroup(frame.GroupId, frame.Content)
 				break
 			case frame := <-hub.BroadcastToAllGroups:
-				hub.broadcastToAllGroups(frame)
+				hub.broadcastToAllGroups(frame.Content)
 				break
 			case frame := <-hub.BroadcastToConnection:
-				hub.broadcastToConnection(frame)
+				hub.broadcastToConnection(frame.GroupId, frame.ConnectionId, frame.Content)
 				break
 			case frame := <-hub.BroadcastToOthersInGroup:
-				hub.broadcastToOthersInGroup(frame)
+				hub.broadcastToOthersInGroup(frame.GroupId, frame.ConnectionId, frame.Content)
 				break
 			case <-done:
 				return
@@ -147,7 +147,7 @@ func (hub *Hub) DisconnectFromGroup(groupId, connectionId string) {
 func (hub *Hub) SendToGroup(groupId string, msg []byte) {
 	frame := &Frame{
 		GroupId: groupId,
-		Content: string(msg),
+		Content: msg,
 		Time:    time.Now(),
 	}
 
@@ -156,7 +156,7 @@ func (hub *Hub) SendToGroup(groupId string, msg []byte) {
 
 func (hub *Hub) SendToAllGroups(msg []byte) {
 	frame := &Frame{
-		Content: string(msg),
+		Content: msg,
 		Time:    time.Now(),
 	}
 
@@ -167,7 +167,7 @@ func (hub *Hub) SendToConnectionId(groupId, connectionId string, msg []byte) {
 	frame := &Frame{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
-		Content:      string(msg),
+		Content:      msg,
 		Time:         time.Now(),
 	}
 
@@ -178,7 +178,7 @@ func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
 	frame := &Frame{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
-		Content:      string(msg),
+		Content:      msg,
 		Time:         time.Now(),
 	}
 
@@ -228,17 +228,11 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 	}
 }
 
-func (hub *Hub) broadcastToGroup(frame *Frame) {
-	if group := hub.group(frame.GroupId); group != nil {
-		b, err := json.Marshal(frame)
-		if err != nil {
-			logrus.Error("failed to marshal hub message: ", err)
-			return
-		}
-
+func (hub *Hub) broadcastToGroup(groupId string, msg []byte) {
+	if group := hub.group(groupId); group != nil {
 		for _, client := range group.Clients {
 			go func(client *Client) {
-				if err := client.write(TextMessage, b); err != nil {
+				if err := client.write(TextMessage, msg); err != nil {
 					logrus.Error("BroadcastToGroup failed: ", err)
 
 					if errBrokenPipe(err) {
@@ -253,19 +247,11 @@ func (hub *Hub) broadcastToGroup(frame *Frame) {
 	}
 }
 
-func (hub *Hub) broadcastToAllGroups(frame *Frame) {
+func (hub *Hub) broadcastToAllGroups(msg []byte) {
 	for _, group := range hub.Groups {
-		frame.GroupId = group.Id
-
-		b, err := json.Marshal(frame)
-		if err != nil {
-			logrus.Error("failed to marshal hub message: ", err)
-			break
-		}
-
 		for _, client := range group.Clients {
 			go func(client *Client) {
-				if err := client.write(TextMessage, b); err != nil {
+				if err := client.write(TextMessage, msg); err != nil {
 					logrus.Error("BroadcastToAllGroups failed: ", err)
 
 					if errBrokenPipe(err) {
@@ -280,20 +266,14 @@ func (hub *Hub) broadcastToAllGroups(frame *Frame) {
 	}
 }
 
-func (hub *Hub) broadcastToConnection(frame *Frame) {
-	if client := hub.client(frame.GroupId, frame.ConnectionId); client != nil {
-		b, err := json.Marshal(frame)
-		if err != nil {
-			logrus.Error("failed to marshal hub message: ", err)
-			return
-		}
-
+func (hub *Hub) broadcastToConnection(groupId, connectionId string, msg []byte) {
+	if client := hub.client(groupId, connectionId); client != nil {
 		go func() {
-			if err := client.write(TextMessage, b); err != nil {
+			if err := client.write(TextMessage, msg); err != nil {
 				logrus.Error("BroadcastToConnection failed: ", err)
 
 				if errBrokenPipe(err) {
-					logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", frame.ConnectionId, frame.GroupId)
+					logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connectionId, groupId)
 					hub.Disconnect <- client
 				}
 
@@ -303,25 +283,19 @@ func (hub *Hub) broadcastToConnection(frame *Frame) {
 	}
 }
 
-func (hub *Hub) broadcastToOthersInGroup(frame *Frame) {
-	if group := hub.group(frame.GroupId); group != nil {
-		b, err := json.Marshal(frame)
-		if err != nil {
-			logrus.Error("failed to marshal hub message: ", err)
-			return
-		}
-
+func (hub *Hub) broadcastToOthersInGroup(groupId, connectionId string, msg []byte) {
+	if group := hub.group(groupId); group != nil {
 		for _, client := range group.Clients {
-			if client.ConnectionId == frame.ConnectionId {
+			if client.ConnectionId == connectionId {
 				continue
 			}
 
 			go func(client *Client) {
-				if err := client.write(TextMessage, b); err != nil {
+				if err := client.write(TextMessage, msg); err != nil {
 					logrus.Error("broadcastToOthersInGroup failed: ", err)
 
 					if errBrokenPipe(err) {
-						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
+						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connectionId, groupId)
 						hub.Disconnect <- client
 					}
 
