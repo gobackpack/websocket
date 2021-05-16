@@ -8,7 +8,7 @@ done := make(chan bool)
 cancelled := hub.ListenConnections(done)
 
 // establish connection
-client, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId)
+client, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
 
 // send message
 hub.SendToGroup(groupId, []byte("message to group"))
