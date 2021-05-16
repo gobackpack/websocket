@@ -249,6 +249,7 @@ func (hub *Hub) broadcastToGroup(groupId string, msg []byte) {
 
 func (hub *Hub) broadcastToAllGroups(msg []byte) {
 	for _, group := range hub.Groups {
+		// NOTE: if necessary each group can be processed concurrently
 		for _, client := range group.Clients {
 			go func(client *Client) {
 				if err := client.write(TextMessage, msg); err != nil {
