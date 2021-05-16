@@ -1,7 +1,6 @@
 package websocket
 
 import (
-	"encoding/json"
 	"github.com/google/uuid"
 	websocketLib "github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -32,6 +31,8 @@ type Hub struct {
 	BroadcastToAllGroups     chan *Frame
 	BroadcastToConnection    chan *Frame
 	BroadcastToOthersInGroup chan *Frame
+
+	ClientClosedConn chan *Client
 }
 
 type Client struct {
@@ -62,6 +63,7 @@ func NewHub() *Hub {
 	return &Hub{
 		Connect:                  make(chan *Client),
 		Disconnect:               make(chan *Client),
+		ClientClosedConn:         make(chan *Client),
 		Groups:                   make([]*Group, 0),
 		BroadcastToGroup:         make(chan *Frame, 0),
 		BroadcastToAllGroups:     make(chan *Frame, 0),
@@ -98,6 +100,8 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 			case frame := <-hub.BroadcastToOthersInGroup:
 				hub.broadcastToOthersInGroup(frame.GroupId, frame.ConnectionId, frame.Content)
 				break
+			case client := <-hub.ClientClosedConn:
+				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 			case <-done:
 				return
 			}
@@ -130,7 +134,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 
 	hub.Connect <- client
 
-	go client.readMessages()
+	go client.readMessages(hub.ClientClosedConn)
 
 	return client, nil
 }
@@ -236,7 +240,7 @@ func (hub *Hub) broadcastToGroup(groupId string, msg []byte) {
 					logrus.Error("BroadcastToGroup failed: ", err)
 
 					if errBrokenPipe(err) {
-						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
+						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
 						hub.Disconnect <- client
 					}
 
@@ -256,7 +260,7 @@ func (hub *Hub) broadcastToAllGroups(msg []byte) {
 					logrus.Error("BroadcastToAllGroups failed: ", err)
 
 					if errBrokenPipe(err) {
-						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
+						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
 						hub.Disconnect <- client
 					}
 
@@ -274,7 +278,7 @@ func (hub *Hub) broadcastToConnection(groupId, connectionId string, msg []byte) 
 				logrus.Error("BroadcastToConnection failed: ", err)
 
 				if errBrokenPipe(err) {
-					logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connectionId, groupId)
+					logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
 					hub.Disconnect <- client
 				}
 
@@ -296,7 +300,7 @@ func (hub *Hub) broadcastToOthersInGroup(groupId, connectionId string, msg []byt
 					logrus.Error("broadcastToOthersInGroup failed: ", err)
 
 					if errBrokenPipe(err) {
-						logrus.Warnf("connection_id [%v] will be disconnected from group [%v]", connectionId, groupId)
+						logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
 						hub.Disconnect <- client
 					}
 
@@ -329,9 +333,9 @@ func (hub *Hub) group(groupId string) *Group {
 	return nil
 }
 
-func (client *Client) readMessages() {
+func (client *Client) readMessages(unexpectedClose chan *Client) {
 	defer func() {
-		logrus.Warnf("websocket connection stopped reading messages: groupId[%v] -> connectionId[%v]",
+		logrus.Warnf("client [%v] from group [%v] stopped reading websocket messages",
 			client.GroupId, client.ConnectionId)
 
 		client.StoppedListening <- true
@@ -341,6 +345,13 @@ func (client *Client) readMessages() {
 		_, msg, err := client.read()
 		if err != nil {
 			client.OnError(err)
+
+			if errGoingAway(err) {
+				unexpectedClose <- &Client{
+					GroupId:      client.GroupId,
+					ConnectionId: client.ConnectionId,
+				}
+			}
 			break
 		}
 
@@ -383,12 +394,6 @@ func errConnClosed(err error) bool {
 	return strings.Contains(err.Error(), "use of closed network connection")
 }
 
-func printGroups(hub *Hub) {
-	for _, group := range hub.Groups {
-		c, err := json.Marshal(group.Clients)
-		if err != nil {
-			logrus.Error("print failed: ", err)
-		}
-		logrus.Infof("groupId: [%v], group clients: %v", group.Id, string(c))
-	}
+func errGoingAway(err error) bool {
+	return strings.Contains(err.Error(), "close 1001 (going away)")
 }
