@@ -85,7 +85,10 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 			case client := <-hub.Connect:
 				hub.assignConnectionToGroup(client)
 				break
-			case client := <-hub.Disconnect:
+			case client := <-hub.Disconnect: // user requested disconnect
+				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
+				break
+			case client := <-hub.ClientClosedConn: // unexpected disconnect (ex: user closed tab - going away err)
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
 			case frame := <-hub.BroadcastToGroup:
@@ -100,8 +103,6 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 			case frame := <-hub.BroadcastToOthersInGroup:
 				hub.broadcastToOthersInGroup(frame.GroupId, frame.ConnectionId, frame.Content)
 				break
-			case client := <-hub.ClientClosedConn:
-				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 			case <-done:
 				return
 			}
