@@ -39,7 +39,7 @@ func main() {
 	done := make(chan bool)
 	cancelled := hub.ListenConnections(done)
 
-	// establish ws connection
+	// connect client to group
 	router.GET("/ws/:groupId", func(ctx *gin.Context) {
 		groupId := ctx.Param("groupId")
 
@@ -57,6 +57,7 @@ func main() {
 		}
 	})
 
+	// disconnect client from group
 	router.POST("/disconnect", func(ctx *gin.Context) {
 		groupId := ctx.GetHeader("group_id")
 		if strings.TrimSpace(groupId) == "" {
@@ -73,6 +74,7 @@ func main() {
 		hub.DisconnectFromGroup(groupId, connId)
 	})
 
+	// get all groups and clients
 	router.GET("/connections", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, hub.Groups)
 	})
