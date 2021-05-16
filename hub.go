@@ -111,15 +111,19 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 	return cancelled
 }
 
-func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, groupId string) (*Client, error) {
+func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, groupId, connectionId string) (*Client, error) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return nil, err
 	}
 
+	if strings.TrimSpace(connectionId) == "" {
+		connectionId = uuid.New().String()
+	}
+
 	client := &Client{
 		GroupId:          groupId,
-		ConnectionId:     uuid.New().String(),
+		ConnectionId:     connectionId,
 		Connection:       conn,
 		StoppedListening: make(chan bool),
 	}
