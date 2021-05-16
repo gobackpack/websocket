@@ -25,9 +25,15 @@ func BenchmarkHub_SendToGroup(b *testing.B) {
 
 	defer ts.Close()
 
-	for n := 0; n < b.N; n++ {
-		go hub.SendToGroup("1", []byte("123456789"))
-	}
+	//for n := 0; n < b.N; n++ {
+	//	go hub.SendToGroup("1", []byte("123456789"))
+	//}
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			hub.SendToGroup("1", []byte("123456789"))
+		}
+	})
 
 	close(done)
 	<-cancelled
