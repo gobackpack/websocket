@@ -17,6 +17,8 @@ hub.SendToAllGroups([]byte("message to all groups"))
 
 hub.SendToConnectionId(groupId, connectionId, []byte("message to connection"))
 
+hub.SendToOthersInGroup(groupId, client.ConnectionId, []byte("message to all connections from my group except myself"))
+
 // disconnect
 hub.DisconnectFromGroup(groupId, connectionId)
 
