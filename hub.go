@@ -225,7 +225,7 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 
 				<-group.Clients[i].stoppedListening
 
-				logrus.Warnf("client [%v] closed websocket connection from group [%v]", connectionId, groupId)
+				logrus.Warnf("client [%v] from group [%v] closed websocket connection", connectionId, groupId)
 
 				copy(group.Clients[i:], group.Clients[i+1:])
 				group.Clients[len(group.Clients)-1] = nil
