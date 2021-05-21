@@ -6,6 +6,7 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
+	"github.com/gobackpack/websocket/example/client"
 	"github.com/gobackpack/websocket/example/tick"
 	"github.com/gobackpack/websocket/example/trade"
 	"github.com/sirupsen/logrus"
@@ -44,18 +45,32 @@ func main() {
 		groupId := ctx.Param("groupId")
 
 		// if connectionId is "", uuid will be automatically generated
-		client, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
+		c, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
 		if err != nil {
 			logrus.Errorf("failed to establish connection with groupId -> %s", groupId)
 			return
 		}
 
-		client.OnMessage = func(msg []byte) error {
-			for i := 0; i < 50; i++ {
-				go hub.SendToOthersInGroup(groupId, client.ConnectionId, msg)
+		d := make(chan bool)
+		go func() {
+			for {
+				select {
+				case msg, ok := <- c.Message:
+					if !ok {
+						close(d)
+						return
+					}
+					logrus.Info(string(msg))
+				}
 			}
-			return nil
-		}
+		}()
+
+		<-d
+
+		//client.OnMessage = func(msg []byte) error {
+		//	go hub.SendToOthersInGroup(groupId, client.ConnectionId, msg)
+		//	return nil
+		//}
 
 		// NOTE: find your own way to return client.ConnectionId to frontend
 		// client.ConnectionId is required for manual /disconnect
@@ -138,6 +153,11 @@ func main() {
 	})
 	router.GET("/trader/stop", func(ctx *gin.Context) {
 		trader.Stop()
+	})
+
+	spammer := client.NewClient()
+	router.GET("/spam", func(ctx *gin.Context) {
+		spammer.Spam()
 	})
 
 	httpServe(router, "", "8080")

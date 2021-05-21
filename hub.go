@@ -40,11 +40,11 @@ type Client struct {
 
 	OnMessage func([]byte) error `json:"-"`
 	OnError   func(err error)    `json:"-"`
+	Message   chan []byte
 
 	connection       *websocketLib.Conn
 	stoppedListening chan bool
-	rLock            sync.Mutex
-	sLock            sync.Mutex
+	lock             sync.Mutex
 }
 
 type Group struct {
@@ -127,6 +127,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		ConnectionId:     connectionId,
 		connection:       conn,
 		stoppedListening: make(chan bool),
+		Message:          make(chan []byte),
 	}
 
 	if client.OnMessage == nil {
@@ -360,24 +361,26 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 			break
 		}
 
-		if err := client.OnMessage(msg); err != nil {
-			client.OnError(err)
-		}
+		client.Message <- msg
+
+		//if err = client.OnMessage(msg); err != nil {
+		//	client.OnError(err)
+		//}
 	}
 }
 
 func (client *Client) read() (int, []byte, error) {
-	client.rLock.Lock()
+	client.lock.Lock()
 	t, p, err := client.connection.ReadMessage()
-	client.rLock.Unlock()
+	client.lock.Unlock()
 
 	return t, p, err
 }
 
 func (client *Client) write(messageType int, data []byte) error {
-	client.sLock.Lock()
+	client.lock.Lock()
 	err := client.connection.WriteMessage(messageType, data)
-	client.sLock.Unlock()
+	client.lock.Unlock()
 
 	return err
 }
