@@ -38,9 +38,8 @@ type Client struct {
 	GroupId      string
 	ConnectionId string
 
-	OnMessage func([]byte) error `json:"-"`
-	OnError   func(err error)    `json:"-"`
-	Message   chan []byte
+	OnMessage chan []byte
+	OnError   func(err error) `json:"-"`
 
 	connection       *websocketLib.Conn
 	stoppedListening chan bool
@@ -127,11 +126,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		ConnectionId:     connectionId,
 		connection:       conn,
 		stoppedListening: make(chan bool),
-		Message:          make(chan []byte),
-	}
-
-	if client.OnMessage == nil {
-		client.OnMessage = client.onMessage
+		OnMessage:        make(chan []byte),
 	}
 
 	if client.OnError == nil {
@@ -352,7 +347,7 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 		if err != nil {
 			client.OnError(err)
 
-			if errGoingAway(err) {
+			if errGoingAway(err) || errAbnormalClose(err) {
 				clientGoingAway <- &Client{
 					GroupId:      client.GroupId,
 					ConnectionId: client.ConnectionId,
@@ -361,11 +356,7 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 			break
 		}
 
-		client.Message <- msg
-
-		//if err = client.OnMessage(msg); err != nil {
-		//	client.OnError(err)
-		//}
+		client.OnMessage <- msg
 	}
 }
 
@@ -404,4 +395,8 @@ func errConnClosed(err error) bool {
 
 func errGoingAway(err error) bool {
 	return strings.Contains(err.Error(), "close 1001 (going away)")
+}
+
+func errAbnormalClose(err error) bool {
+	return strings.Contains(err.Error(), "close 1006 (abnormal closure): unexpected EOF")
 }

@@ -45,6 +45,9 @@ func main() {
 		groupId := ctx.Param("groupId")
 
 		// if connectionId is "", uuid will be automatically generated
+		// NOTE: find your own way to return client.ConnectionId to frontend
+		// client.ConnectionId is required for manual /disconnect
+
 		c, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
 		if err != nil {
 			logrus.Errorf("failed to establish connection with groupId -> %s", groupId)
@@ -55,7 +58,7 @@ func main() {
 		go func() {
 			for {
 				select {
-				case msg, ok := <- c.Message:
+				case msg, ok := <- c.OnMessage:
 					if !ok {
 						close(d)
 						return
@@ -66,14 +69,6 @@ func main() {
 		}()
 
 		<-d
-
-		//client.OnMessage = func(msg []byte) error {
-		//	go hub.SendToOthersInGroup(groupId, client.ConnectionId, msg)
-		//	return nil
-		//}
-
-		// NOTE: find your own way to return client.ConnectionId to frontend
-		// client.ConnectionId is required for manual /disconnect
 	})
 
 	// disconnect client from group
