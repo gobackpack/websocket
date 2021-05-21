@@ -55,20 +55,30 @@ func main() {
 		}
 
 		d := make(chan bool)
+		counter := 0
 		go func() {
+			defer func() {
+				logrus.Warn("closing d")
+				close(d)
+			}()
 			for {
 				select {
-				case msg, ok := <- c.OnMessage:
+				case _, ok := <-c.OnMessage:
 					if !ok {
-						close(d)
 						return
 					}
-					logrus.Info(string(msg))
+					//logrus.Info(string(msg))
+					counter++
+					break
+				case <-c.OnError:
+					return
 				}
 			}
 		}()
 
 		<-d
+
+		logrus.Infof("received %v message", counter)
 	})
 
 	// disconnect client from group

@@ -39,7 +39,7 @@ type Client struct {
 	ConnectionId string
 
 	OnMessage chan []byte
-	OnError   func(err error) `json:"-"`
+	OnError   chan error
 
 	connection       *websocketLib.Conn
 	stoppedListening chan bool
@@ -127,10 +127,7 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		connection:       conn,
 		stoppedListening: make(chan bool),
 		OnMessage:        make(chan []byte),
-	}
-
-	if client.OnError == nil {
-		client.OnError = client.onError
+		OnError:          make(chan error),
 	}
 
 	hub.connect <- client
@@ -345,13 +342,13 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 	for {
 		_, msg, err := client.read()
 		if err != nil {
-			client.OnError(err)
-
 			if errGoingAway(err) || errAbnormalClose(err) {
 				clientGoingAway <- &Client{
 					GroupId:      client.GroupId,
 					ConnectionId: client.ConnectionId,
 				}
+
+				client.OnError <- err
 			}
 			break
 		}
@@ -374,15 +371,6 @@ func (client *Client) write(messageType int, data []byte) error {
 	client.lock.Unlock()
 
 	return err
-}
-
-func (client *Client) onMessage(msg []byte) error {
-	logrus.Infof("client [%v] received message: %v", client.ConnectionId, string(msg))
-	return nil
-}
-
-func (client *Client) onError(err error) {
-	logrus.Errorf("client [%v] received error message: %v", client.ConnectionId, err)
 }
 
 func errBrokenPipe(err error) bool {

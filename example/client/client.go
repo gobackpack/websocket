@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	websocketLib "github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"sync"
@@ -30,19 +31,14 @@ func (client *Client) Spam() {
 
 	client.Conn = conn
 
-	delta := 50
-	msgs := 1000
-	//wg := sync.WaitGroup{}
-	//wg.Add(delta)
-	for i := 0; i < delta; i++ {
-		for j := 0; j < msgs; j++ {
-			if err = client.write(websocketLib.TextMessage, []byte("msg 123 msg 123")); err != nil {
-				logrus.Error(err)
-			}
+	delta := 20000
+	for j := 0; j < delta; j++ {
+		if err = client.write(websocketLib.TextMessage, []byte(fmt.Sprint("msg ", j))); err != nil {
+			logrus.Error(err)
 		}
 	}
 
-	logrus.Infof("sent [%v] messages to [%v] clients", msgs, delta)
+	logrus.Infof("sent [%v] messages", delta)
 }
 
 func (client *Client) write(messageType int, data []byte) error {
