@@ -48,37 +48,38 @@ func main() {
 		// NOTE: find your own way to return client.ConnectionId to frontend
 		// client.ConnectionId is required for manual /disconnect
 
-		c, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
+		_, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
 		if err != nil {
 			logrus.Errorf("failed to establish connection with groupId -> %s", groupId)
 			return
 		}
 
-		d := make(chan bool)
-		counter := 0
-		go func() {
-			defer func() {
-				logrus.Warn("closing d")
-				close(d)
-			}()
-			for {
-				select {
-				case msg, ok := <-c.OnMessage:
-					if !ok {
-						return
-					}
-					hub.SendToAllGroups(msg)
-					counter++
-					break
-				case <-c.OnError:
-					return
-				}
-			}
-		}()
-
-		<-d
-
-		logrus.Infof("received %v message", counter)
+		// optional, do something with client, set some callbacks
+		//d := make(chan bool)
+		//counter := 0
+		//go func() {
+		//	defer func() {
+		//		logrus.Warn("closing d")
+		//		close(d)
+		//	}()
+		//	for {
+		//		select {
+		//		case msg, ok := <-c.OnMessage:
+		//			if !ok {
+		//				return
+		//			}
+		//			hub.SendToAllGroups(msg)
+		//			counter++
+		//			break
+		//		case <-c.OnError:
+		//			return
+		//		}
+		//	}
+		//}()
+		//
+		//<-d
+		//
+		//logrus.Infof("received %v message", counter)
 	})
 
 	// disconnect client from group
