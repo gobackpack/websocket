@@ -38,12 +38,13 @@ type Client struct {
 	GroupId      string
 	ConnectionId string
 
-	OnMessage chan []byte
-	OnError   chan error
+	OnMessage chan []byte `json:"-"`
+	OnError   chan error  `json:"-"`
 
 	connection       *websocketLib.Conn
 	stoppedListening chan bool
-	lock             sync.Mutex
+	rLock            sync.Mutex
+	wLock            sync.Mutex
 }
 
 type Group struct {
@@ -235,7 +236,7 @@ func (hub *Hub) sendToGroup(groupId string, msg []byte) {
 		for _, client := range group.Clients {
 			go func(client *Client) {
 				if err := client.write(TextMessage, msg); err != nil {
-					logrus.Error("broadcastToGroup failed: ", err)
+					//logrus.Error("broadcastToGroup failed: ", err)
 
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
@@ -255,7 +256,7 @@ func (hub *Hub) sendToAllGroups(msg []byte) {
 		for _, client := range group.Clients {
 			go func(client *Client) {
 				if err := client.write(TextMessage, msg); err != nil {
-					logrus.Error("broadcastToAllGroups failed: ", err)
+					//logrus.Error("broadcastToAllGroups failed: ", err)
 
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
@@ -273,7 +274,7 @@ func (hub *Hub) sendToConnection(groupId, connectionId string, msg []byte) {
 	if client := hub.client(groupId, connectionId); client != nil {
 		go func() {
 			if err := client.write(TextMessage, msg); err != nil {
-				logrus.Error("broadcastToConnection failed: ", err)
+				//logrus.Error("broadcastToConnection failed: ", err)
 
 				if errBrokenPipe(err) {
 					logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
@@ -295,7 +296,7 @@ func (hub *Hub) sendToOthersInGroup(groupId, connectionId string, msg []byte) {
 
 			go func(client *Client) {
 				if err := client.write(TextMessage, msg); err != nil {
-					logrus.Error("broadcastToOthersInGroup failed: ", err)
+					//logrus.Error("broadcastToOthersInGroup failed: ", err)
 
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
@@ -341,9 +342,23 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 
 	for {
 		_, msg, err := client.read()
+		//if err != nil {
+		//	client.OnErrorCallback(err)
+		//
+		//	if errGoingAway(err) {
+		//		clientGoingAway <- &Client{
+		//			GroupId:      client.GroupId,
+		//			ConnectionId: client.ConnectionId,
+		//		}
+		//	}
+		//	break
+		//}
+		//
+		//if err = client.OnMessageCallback(msg); err != nil {
+		//	client.OnErrorCallback(err)
+		//}
+
 		if err != nil {
-			client.OnError <- err
-			
 			if errGoingAway(err) || errAbnormalClose(err) {
 				clientGoingAway <- &Client{
 					GroupId:      client.GroupId,
@@ -352,6 +367,8 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 
 				break
 			}
+
+			client.OnError <- err
 		}
 
 		client.OnMessage <- msg
@@ -359,17 +376,17 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 }
 
 func (client *Client) read() (int, []byte, error) {
-	client.lock.Lock()
+	client.rLock.Lock()
 	t, p, err := client.connection.ReadMessage()
-	client.lock.Unlock()
+	client.rLock.Unlock()
 
 	return t, p, err
 }
 
 func (client *Client) write(messageType int, data []byte) error {
-	client.lock.Lock()
+	client.wLock.Lock()
 	err := client.connection.WriteMessage(messageType, data)
-	client.lock.Unlock()
+	client.wLock.Unlock()
 
 	return err
 }

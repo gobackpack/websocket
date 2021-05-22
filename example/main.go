@@ -63,11 +63,11 @@ func main() {
 			}()
 			for {
 				select {
-				case _, ok := <-c.OnMessage:
+				case msg, ok := <-c.OnMessage:
 					if !ok {
 						return
 					}
-					//logrus.Info(string(msg))
+					hub.SendToAllGroups(msg)
 					counter++
 					break
 				case <-c.OnError:
