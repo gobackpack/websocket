@@ -38,8 +38,10 @@ type Client struct {
 	GroupId      string
 	ConnectionId string
 
-	OnMessage chan []byte
-	OnError   chan error
+	OnMessage         chan []byte
+	OnError           chan error
+	OnMessageCallback func([]byte) error `json:"-"`
+	OnErrorCallback   func(err error)    `json:"-"`
 
 	connection       *websocketLib.Conn
 	stoppedListening chan bool
@@ -128,6 +130,14 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		stoppedListening: make(chan bool),
 		OnMessage:        make(chan []byte),
 		OnError:          make(chan error),
+	}
+
+	if client.OnMessageCallback == nil {
+		client.OnMessageCallback = client.onMessage
+	}
+
+	if client.OnErrorCallback == nil {
+		client.OnErrorCallback = client.onError
 	}
 
 	hub.connect <- client
@@ -342,19 +352,35 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 	for {
 		_, msg, err := client.read()
 		if err != nil {
-			client.OnError <- err
-			
-			if errGoingAway(err) || errAbnormalClose(err) {
+			client.OnErrorCallback(err)
+
+			if errGoingAway(err) {
 				clientGoingAway <- &Client{
 					GroupId:      client.GroupId,
 					ConnectionId: client.ConnectionId,
 				}
-
-				break
 			}
+			break
 		}
 
-		client.OnMessage <- msg
+		if err = client.OnMessageCallback(msg); err != nil {
+			client.OnErrorCallback(err)
+		}
+
+		//if err != nil {
+		//	client.OnError <- err
+		//
+		//	if errGoingAway(err) || errAbnormalClose(err) {
+		//		clientGoingAway <- &Client{
+		//			GroupId:      client.GroupId,
+		//			ConnectionId: client.ConnectionId,
+		//		}
+		//
+		//		break
+		//	}
+		//}
+		//
+		//client.OnMessage <- msg
 	}
 }
 
@@ -372,6 +398,15 @@ func (client *Client) write(messageType int, data []byte) error {
 	client.lock.Unlock()
 
 	return err
+}
+
+func (client *Client) onMessage(msg []byte) error {
+	logrus.Infof("client [%v] received message: %v", client.ConnectionId, string(msg))
+	return nil
+}
+
+func (client *Client) onError(err error) {
+	logrus.Errorf("client [%v] received error message: %v", client.ConnectionId, err)
 }
 
 func errBrokenPipe(err error) bool {

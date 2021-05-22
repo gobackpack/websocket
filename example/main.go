@@ -54,31 +54,38 @@ func main() {
 			return
 		}
 
-		d := make(chan bool)
-		counter := 0
-		go func() {
-			defer func() {
-				logrus.Warn("closing d")
-				close(d)
-			}()
-			for {
-				select {
-				case _, ok := <-c.OnMessage:
-					if !ok {
-						return
-					}
-					//logrus.Info(string(msg))
-					counter++
-					break
-				case <-c.OnError:
-					return
-				}
+		c.OnMessageCallback = func(msg []byte) error {
+			for i := 0; i < 50; i++ {
+				go hub.SendToGroup(groupId, msg)
 			}
-		}()
+			return nil
+		}
 
-		<-d
-
-		logrus.Infof("received %v message", counter)
+		//d := make(chan bool)
+		//counter := 0
+		//go func() {
+		//	defer func() {
+		//		logrus.Warn("closing d")
+		//		close(d)
+		//	}()
+		//	for {
+		//		select {
+		//		case msg, ok := <-c.OnMessage:
+		//			if !ok {
+		//				return
+		//			}
+		//			hub.SendToAllGroups(msg)
+		//			counter++
+		//			break
+		//		case <-c.OnError:
+		//			//return
+		//		}
+		//	}
+		//}()
+		//
+		//<-d
+		//
+		//logrus.Infof("received %v message", counter)
 	})
 
 	// disconnect client from group
