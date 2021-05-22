@@ -335,7 +335,7 @@ func (hub *Hub) group(groupId string) *Group {
 func (client *Client) readMessages(clientGoingAway chan *Client) {
 	defer func() {
 		logrus.Warnf("client [%v] from group [%v] stopped reading websocket messages",
-			client.GroupId, client.ConnectionId)
+			client.ConnectionId, client.GroupId)
 
 		client.stoppedListening <- true
 	}()
