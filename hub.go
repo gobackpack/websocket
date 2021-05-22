@@ -342,15 +342,16 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 	for {
 		_, msg, err := client.read()
 		if err != nil {
+			client.OnError <- err
+			
 			if errGoingAway(err) || errAbnormalClose(err) {
 				clientGoingAway <- &Client{
 					GroupId:      client.GroupId,
 					ConnectionId: client.ConnectionId,
 				}
 
-				client.OnError <- err
+				break
 			}
-			break
 		}
 
 		client.OnMessage <- msg
