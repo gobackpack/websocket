@@ -342,23 +342,9 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 
 	for {
 		_, msg, err := client.read()
-		//if err != nil {
-		//	client.OnErrorCallback(err)
-		//
-		//	if errGoingAway(err) {
-		//		clientGoingAway <- &Client{
-		//			GroupId:      client.GroupId,
-		//			ConnectionId: client.ConnectionId,
-		//		}
-		//	}
-		//	break
-		//}
-		//
-		//if err = client.OnMessageCallback(msg); err != nil {
-		//	client.OnErrorCallback(err)
-		//}
-
 		if err != nil {
+			client.OnError <- err
+
 			if errGoingAway(err) || errAbnormalClose(err) {
 				clientGoingAway <- &Client{
 					GroupId:      client.GroupId,
@@ -368,7 +354,7 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 				break
 			}
 
-			client.OnError <- err
+			continue
 		}
 
 		client.OnMessage <- msg
