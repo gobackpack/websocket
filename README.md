@@ -22,7 +22,7 @@ go func () {
         select {
         case msg, ok := <-c.OnMessage:
             if !ok {
-            return
+                return
             }
             hub.SendToAllGroups(msg)
             counter++
