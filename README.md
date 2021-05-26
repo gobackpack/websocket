@@ -12,7 +12,7 @@ client, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
 client.OnMessage = make(chan []byte)
 client.OnError = make(chan error)
 
-// NOTE: required for now, listen for messages
+// NOTE: if OnMessage and OnError provided, then this listener is required, for now
 d := make(chan bool)
 counter := 0
 go func () {
