@@ -31,7 +31,7 @@ func (client *Client) Spam() {
 
 	client.Conn = conn
 
-	delta := 2000
+	delta := 500
 	for j := 0; j < delta; j++ {
 		if err = client.write(websocketLib.TextMessage, []byte(fmt.Sprint("msg ", j))); err != nil {
 			logrus.Error(err)

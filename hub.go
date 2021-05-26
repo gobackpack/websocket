@@ -343,7 +343,7 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 	for {
 		_, msg, err := client.read()
 		if err != nil {
-			//client.OnError <- err
+			client.OnError <- err
 
 			if errGoingAway(err) || errAbnormalClose(err) {
 				clientGoingAway <- &Client{
