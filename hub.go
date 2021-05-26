@@ -350,11 +350,9 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 					GroupId:      client.GroupId,
 					ConnectionId: client.ConnectionId,
 				}
-
-				break
 			}
 
-			continue
+			break
 		}
 
 		client.OnMessage <- msg

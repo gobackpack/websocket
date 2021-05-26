@@ -54,7 +54,7 @@ func main() {
 			return
 		}
 
-		// optional, listen for messages
+		// required, listen for messages
 		d := make(chan bool)
 		counter := 0
 		go func() {
@@ -62,6 +62,7 @@ func main() {
 				close(d)
 				logrus.Warn("closed d")
 			}()
+
 			for {
 				select {
 				case msg, ok := <-c.OnMessage:
