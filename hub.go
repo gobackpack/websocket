@@ -127,8 +127,6 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 		ConnectionId:     connectionId,
 		connection:       conn,
 		stoppedListening: make(chan bool),
-		OnMessage:        make(chan []byte),
-		OnError:          make(chan error),
 	}
 
 	hub.connect <- client
@@ -343,7 +341,9 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 	for {
 		_, msg, err := client.read()
 		if err != nil {
-			client.OnError <- err
+			if client.OnError != nil {
+				client.OnError <- err
+			}
 
 			if errGoingAway(err) || errAbnormalClose(err) {
 				clientGoingAway <- &Client{
@@ -355,7 +355,9 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 			break
 		}
 
-		client.OnMessage <- msg
+		if client.OnMessage != nil {
+			client.OnMessage <- msg
+		}
 	}
 }
 

@@ -9,6 +9,9 @@ cancelled := hub.ListenConnections(done)
 
 // establish connection
 client, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
+client.OnMessage = make(chan []byte)
+client.OnError = make(chan error)
+
 // NOTE: required for now, listen for messages
 d := make(chan bool)
 counter := 0
@@ -20,14 +23,14 @@ go func () {
     
     for {
         select {
-        case msg, ok := <-c.OnMessage:
+        case msg, ok := <-client.OnMessage:
             if !ok {
                 return
             }
             hub.SendToAllGroups(msg)
             counter++
             break
-        case <-c.OnError:
+        case <-client.OnError:
             return
         }
     }

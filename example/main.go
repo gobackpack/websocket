@@ -53,8 +53,10 @@ func main() {
 			logrus.Errorf("failed to establish connection with groupId -> %s", groupId)
 			return
 		}
+		c.OnMessage = make(chan []byte)
+		c.OnError = make(chan error)
 
-		// required, listen for messages
+		// NOTE: required, listen for messages
 		d := make(chan bool)
 		counter := 0
 		go func() {
