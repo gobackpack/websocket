@@ -44,8 +44,8 @@ func main() {
 	router.GET("/ws/:groupId", func(ctx *gin.Context) {
 		groupId := ctx.Param("groupId")
 
-		// if connectionId is "", uuid will be automatically generated
-		// NOTE: find your own way to return client.ConnectionId to frontend
+		// NOTE: if connectionId is "", uuid will be automatically generated
+		// find your own way to return client.ConnectionId to frontend
 		// client.ConnectionId is required for manual /disconnect
 
 		c, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
@@ -53,10 +53,11 @@ func main() {
 			logrus.Errorf("failed to establish connection with groupId -> %s", groupId)
 			return
 		}
+
+		// optional callbacks
 		c.OnMessage = make(chan []byte)
 		c.OnError = make(chan error)
 
-		// NOTE: required, listen for messages
 		d := make(chan bool)
 		counter := 0
 		go func() {
