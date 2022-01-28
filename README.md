@@ -63,3 +63,11 @@ close(done)
 ![image](https://user-images.githubusercontent.com/8428635/119730949-a181f880-be76-11eb-9dcd-f4952342f3b8.png)
 
 ![image](https://user-images.githubusercontent.com/8428635/119730888-8adba180-be76-11eb-8f29-019cd7d42792.png)
+
+
+#### Todo
+* Replace with RWMutex
+```go
+rLock            sync.Mutex
+wLock            sync.Mutex
+```
