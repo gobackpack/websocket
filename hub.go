@@ -43,8 +43,7 @@ type Client struct {
 
 	connection       *websocketLib.Conn
 	stoppedListening chan bool
-	rLock            sync.Mutex
-	wLock            sync.Mutex
+	lock             sync.RWMutex
 }
 
 type Group struct {
@@ -362,17 +361,17 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 }
 
 func (client *Client) read() (int, []byte, error) {
-	client.rLock.Lock()
+	client.lock.Lock()
 	t, p, err := client.connection.ReadMessage()
-	client.rLock.Unlock()
+	client.lock.Unlock()
 
 	return t, p, err
 }
 
 func (client *Client) write(messageType int, data []byte) error {
-	client.wLock.Lock()
+	client.lock.Lock()
 	err := client.connection.WriteMessage(messageType, data)
-	client.wLock.Unlock()
+	client.lock.Unlock()
 
 	return err
 }
