@@ -66,8 +66,9 @@ close(done)
 
 
 #### Todo
-* Replace with RWMutex
+* Make sure the following are thread-safe:
 ```go
-rLock            sync.Mutex
-wLock            sync.Mutex
+client.read()
+client.write()
+group.Clients[i]
 ```
