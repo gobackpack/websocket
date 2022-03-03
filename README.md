@@ -70,5 +70,5 @@ close(done)
 ```go
 client.read()
 client.write()
-group.Clients[i]
+hub.Groups
 ```

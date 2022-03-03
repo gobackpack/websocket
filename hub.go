@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"github.com/google/uuid"
 	websocketLib "github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -32,6 +33,8 @@ type Hub struct {
 	broadcastToAllGroups     chan *Frame
 	broadcastToConnection    chan *Frame
 	broadcastToOthersInGroup chan *Frame
+
+	lock sync.RWMutex
 }
 
 type Client struct {
@@ -71,10 +74,10 @@ func NewHub() *Hub {
 	}
 }
 
-func (hub *Hub) ListenConnections(done chan bool) chan bool {
+func (hub *Hub) ListenConnections(ctx context.Context) chan bool {
 	cancelled := make(chan bool)
 
-	go func(done chan bool) {
+	go func(ctx context.Context) {
 		defer func() {
 			cancelled <- true
 		}()
@@ -102,11 +105,11 @@ func (hub *Hub) ListenConnections(done chan bool) chan bool {
 			case frame := <-hub.broadcastToOthersInGroup:
 				hub.sendToOthersInGroup(frame.GroupId, frame.ConnectionId, frame.Content)
 				break
-			case <-done:
+			case <-ctx.Done():
 				return
 			}
 		}
-	}(done)
+	}(ctx)
 
 	return cancelled
 }
@@ -362,18 +365,16 @@ func (client *Client) readMessages(clientGoingAway chan *Client) {
 
 func (client *Client) read() (int, []byte, error) {
 	client.lock.Lock()
-	t, p, err := client.connection.ReadMessage()
-	client.lock.Unlock()
+	defer client.lock.Unlock()
 
-	return t, p, err
+	return client.connection.ReadMessage()
 }
 
 func (client *Client) write(messageType int, data []byte) error {
 	client.lock.Lock()
-	err := client.connection.WriteMessage(messageType, data)
-	client.lock.Unlock()
+	defer client.lock.Unlock()
 
-	return err
+	return client.connection.WriteMessage(messageType, data)
 }
 
 func errBrokenPipe(err error) bool {
