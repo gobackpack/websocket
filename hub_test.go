@@ -1,6 +1,7 @@
 package websocket_test
 
 import (
+	"context"
 	"github.com/gobackpack/websocket"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -11,8 +12,8 @@ import (
 func BenchmarkHub_SendToGroup(b *testing.B) {
 	hub := websocket.NewHub()
 
-	done := make(chan bool)
-	cancelled := hub.ListenConnections(done)
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	cancelled := hub.ListenConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,15 +36,15 @@ func BenchmarkHub_SendToGroup(b *testing.B) {
 		}
 	})
 
-	close(done)
+	hubCancel()
 	<-cancelled
 }
 
 func BenchmarkHub_SendToAllGroups(b *testing.B) {
 	hub := websocket.NewHub()
 
-	done := make(chan bool)
-	cancelled := hub.ListenConnections(done)
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	cancelled := hub.ListenConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,15 +60,15 @@ func BenchmarkHub_SendToAllGroups(b *testing.B) {
 		go hub.SendToAllGroups([]byte("123456789"))
 	}
 
-	close(done)
+	hubCancel()
 	<-cancelled
 }
 
 func BenchmarkHub_SendToConnectionId(b *testing.B) {
 	hub := websocket.NewHub()
 
-	done := make(chan bool)
-	cancelled := hub.ListenConnections(done)
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	cancelled := hub.ListenConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -83,15 +84,15 @@ func BenchmarkHub_SendToConnectionId(b *testing.B) {
 		go hub.SendToConnectionId("1", "1", []byte("123456789"))
 	}
 
-	close(done)
+	hubCancel()
 	<-cancelled
 }
 
 func BenchmarkHub_SendToOthersInGroup(b *testing.B) {
 	hub := websocket.NewHub()
 
-	done := make(chan bool)
-	cancelled := hub.ListenConnections(done)
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	cancelled := hub.ListenConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -107,15 +108,15 @@ func BenchmarkHub_SendToOthersInGroup(b *testing.B) {
 		go hub.SendToOthersInGroup("1", "1", []byte("123456789"))
 	}
 
-	close(done)
+	hubCancel()
 	<-cancelled
 }
 
 func BenchmarkHub_EstablishConnection(b *testing.B) {
 	hub := websocket.NewHub()
 
-	done := make(chan bool)
-	cancelled := hub.ListenConnections(done)
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	cancelled := hub.ListenConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -129,6 +130,6 @@ func BenchmarkHub_EstablishConnection(b *testing.B) {
 
 	defer ts.Close()
 
-	close(done)
+	hubCancel()
 	<-cancelled
 }

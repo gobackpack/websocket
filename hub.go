@@ -37,6 +37,11 @@ type Hub struct {
 	lock sync.RWMutex
 }
 
+type Group struct {
+	Id      string
+	Clients []*Client
+}
+
 type Client struct {
 	GroupId      string
 	ConnectionId string
@@ -46,11 +51,6 @@ type Client struct {
 
 	connection *websocketLib.Conn
 	lock       sync.RWMutex
-}
-
-type Group struct {
-	Id      string
-	Clients []*Client
 }
 
 type Frame struct {
