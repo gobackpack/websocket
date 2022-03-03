@@ -6,41 +6,40 @@ Usage
 // initialize hub and start listening for connections
 hub := websocket.NewHub()
 
-done := make(chan bool)
-cancelled := hub.ListenConnections(done)
+hubCtx, hubCancel := context.WithCancel(context.Background())
+hubCancelled := hub.ListenConnections(hubCtx)
 
-// establish connection
-client, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
-client.OnMessage = make(chan []byte)
+// create client and establish connection with ws hub
+client, err := hub.EstablishConnection(c.Writer, c.Request, groupId, connId)
+if err != nil {
+    logrus.Errorf("failed to establish connection with groupId -> %s: %s", groupId, err)
+    return
+}
+
 client.OnError = make(chan error)
+client.OnMessage = make(chan []byte)
+clientCtx, clientCancel := context.WithCancel(hubCtx)
 
-// NOTE: if OnMessage and OnError provided, then this listener is required, for now
-d := make(chan bool)
-counter := 0
-go func () {
-    defer func () {
-        close(d)
-        logrus.Warn("closed d")
-    }()
-    
+clientCancelled := client.ReadMessages(clientCtx)
+
+// handle messages
+go func (clientCancel context.CancelFunc, client *websocket.Client) {
+    defer clientCancel()
+
     for {
         select {
-        case msg, ok := <-client.OnMessage:
-            if !ok {
-                return
-            }
-            hub.SendToAllGroups(msg)
-            counter++
-            break
-        case <-client.OnError:
+        case msg := <-client.OnMessage:
+            logrus.Infof("client %s received message: %s", client.ConnectionId, msg)
+			// optionally pass message to other connections, groups...
+			hub.SendToGroup(groupId, msg)
+        case err := <-client.OnError:
+            logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
             return
         }
     }
-}()
+}(clientCancel, client)
 
-<-d
-
-logrus.Infof("received %v message", counter)
+<-clientCancelled
 
 // send message
 hub.SendToGroup(groupId, []byte("message to group"))
@@ -55,18 +54,18 @@ hub.SendToOthersInGroup(groupId, client.ConnectionId, []byte("message to all con
 hub.DisconnectFromGroup(groupId, connectionId)
 
 // close
-close(done)
-<-cancelled
+hubCancel()
+<-hubCancelled
 ```
-
 
 ![image](https://user-images.githubusercontent.com/8428635/119730949-a181f880-be76-11eb-9dcd-f4952342f3b8.png)
 
 ![image](https://user-images.githubusercontent.com/8428635/119730888-8adba180-be76-11eb-8f29-019cd7d42792.png)
 
-
 #### Todo
+
 * Make sure the following are thread-safe:
+
 ```go
 client.read()
 client.write()
