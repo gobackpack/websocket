@@ -38,12 +38,16 @@ func main() {
 	// connect client to group
 	router.GET("/ws/:groupId", func(c *gin.Context) {
 		groupId := c.Param("groupId")
+		connId, ok := c.GetQuery("connId")
+		if !ok {
+			connId = ""
+		}
 
 		// NOTE: if connectionId is "", uuid will be automatically generated
 		// find your own way to return client.ConnectionId to frontend
 		// client.ConnectionId is required for manual /disconnect
 
-		client, err := hub.EstablishConnection(c.Writer, c.Request, groupId, "")
+		client, err := hub.EstablishConnection(c.Writer, c.Request, groupId, connId)
 		if err != nil {
 			logrus.Errorf("failed to establish connection with groupId -> %s: %s", groupId, err)
 			return
@@ -51,11 +55,11 @@ func main() {
 
 		client.OnError = make(chan error)
 		client.OnMessage = make(chan []byte)
-		clientCtx, clientCancel := context.WithCancel(hubCtx)
+		clientCtx, clientCancel := context.WithCancel(context.Background())
 
 		clientCancelled := client.ReadMessages(clientCtx)
 
-		go func(clientCancel context.CancelFunc) {
+		go func(clientCancel context.CancelFunc, client *websocket.Client) {
 			for {
 				select {
 				case msg := <-client.OnMessage:
@@ -63,15 +67,11 @@ func main() {
 					break
 				case err := <-client.OnError:
 					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
-					break
-					//clientCancel() // we choose when to stop reading messages from ws
-					//return
-				case <-time.After(5 * time.Second):
-					clientCancel() // only simulation to stop reading messages from ws
+					clientCancel()
 					return
 				}
 			}
-		}(clientCancel)
+		}(clientCancel, client)
 
 		logrus.Infof("client %s listening for messages...", client.ConnectionId)
 
