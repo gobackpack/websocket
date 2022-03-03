@@ -6,9 +6,6 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
-	"github.com/gobackpack/websocket/example/client"
-	"github.com/gobackpack/websocket/example/tick"
-	"github.com/gobackpack/websocket/example/trade"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"net/http"
@@ -25,7 +22,7 @@ func main() {
 
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
-	router.LoadHTMLFiles("example/index.html")
+	router.LoadHTMLFiles("index.html")
 
 	pprof.Register(router)
 
@@ -37,66 +34,35 @@ func main() {
 
 	hub := websocket.NewHub()
 
-	done := make(chan bool)
-	cancelled := hub.ListenConnections(done)
+	ctxMain, cancel := context.WithCancel(context.Background())
+	cancelled := hub.ListenConnections(ctxMain)
 
 	// connect client to group
-	router.GET("/ws/:groupId", func(ctx *gin.Context) {
-		groupId := ctx.Param("groupId")
+	router.GET("/ws/:groupId", func(c *gin.Context) {
+		groupId := c.Param("groupId")
 
 		// NOTE: if connectionId is "", uuid will be automatically generated
 		// find your own way to return client.ConnectionId to frontend
 		// client.ConnectionId is required for manual /disconnect
 
-		c, err := hub.EstablishConnection(ctx.Writer, ctx.Request, groupId, "")
+		_, err := hub.EstablishConnection(c.Writer, c.Request, groupId, "")
 		if err != nil {
-			logrus.Errorf("failed to establish connection with groupId -> %s", groupId)
+			logrus.Errorf("failed to establish connection with groupId -> %s: %s", groupId, err)
 			return
 		}
-
-		// optional callbacks
-		c.OnMessage = make(chan []byte)
-		c.OnError = make(chan error)
-
-		d := make(chan bool)
-		counter := 0
-		go func() {
-			defer func() {
-				close(d)
-				logrus.Warn("closed d")
-			}()
-
-			for {
-				select {
-				case msg, ok := <-c.OnMessage:
-					if !ok {
-						return
-					}
-					hub.SendToAllGroups(msg)
-					counter++
-					break
-				case <-c.OnError:
-					return
-				}
-			}
-		}()
-
-		<-d
-
-		logrus.Infof("received %v message", counter)
 	})
 
 	// disconnect client from group
-	router.POST("/disconnect", func(ctx *gin.Context) {
-		groupId := ctx.GetHeader("group_id")
+	router.POST("/disconnect", func(c *gin.Context) {
+		groupId := c.GetHeader("group_id")
 		if strings.TrimSpace(groupId) == "" {
-			ctx.JSON(http.StatusBadRequest, "missing group_id from headers")
+			c.JSON(http.StatusBadRequest, "missing group_id from headers")
 			return
 		}
 
-		connId := ctx.GetHeader("connection_id")
+		connId := c.GetHeader("connection_id")
 		if strings.TrimSpace(connId) == "" {
-			ctx.JSON(http.StatusBadRequest, "missing connection_id from headers")
+			c.JSON(http.StatusBadRequest, "missing connection_id from headers")
 			return
 		}
 
@@ -104,76 +70,44 @@ func main() {
 	})
 
 	// get all groups and clients
-	router.GET("/connections", func(ctx *gin.Context) {
-		ctx.JSON(http.StatusOK, hub.Groups)
+	router.GET("/connections", func(c *gin.Context) {
+		c.JSON(http.StatusOK, hub.Groups)
 	})
 
 	// examples
-	router.POST("/sendMessage", func(ctx *gin.Context) {
-		groupId := ctx.GetHeader("group_id")
+	router.POST("/sendMessage", func(c *gin.Context) {
+		groupId := c.GetHeader("group_id")
 		if strings.TrimSpace(groupId) == "" {
-			ctx.JSON(http.StatusBadRequest, "missing group_id from headers")
+			c.JSON(http.StatusBadRequest, "missing group_id from headers")
 			return
 		}
 
 		wg := sync.WaitGroup{}
-		wg.Add(200)
 
+		wg.Add(100)
 		for i := 0; i < 100; i++ {
-			go func() {
+			go func(wg *sync.WaitGroup) {
 				hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
 				wg.Done()
-			}()
-		}
-
-		for i := 0; i < 100; i++ {
-			go func() {
-				hub.SendToAllGroups([]byte("all groups"))
-				wg.Done()
-			}()
-		}
-
-		connectionId := ctx.GetHeader("connection_id")
-		if strings.TrimSpace(connectionId) != "" {
-			wg.Add(100)
-			for i := 0; i < 100; i++ {
-				go func() {
-					hub.SendToConnectionId(groupId, connectionId, []byte(fmt.Sprintf("groupId [%v] connectionId [%v]", groupId, connectionId)))
-					wg.Done()
-				}()
-			}
+			}(&wg)
 		}
 
 		wg.Wait()
+
+		logrus.Info("all messages sent")
 	})
 
-	// app 1
-	ticker := tick.NewTicker(hub)
-	router.GET("/ticks/start", func(ctx *gin.Context) {
-		ticker.Start()
-	})
-	router.GET("/ticks/stop", func(ctx *gin.Context) {
-		ticker.Stop()
-	})
-
-	// app 2
-	trader := trade.NewTrader(hub)
-	router.GET("/trader/start", func(ctx *gin.Context) {
-		trader.Start()
-	})
-	router.GET("/trader/stop", func(ctx *gin.Context) {
-		trader.Stop()
-	})
-
-	spammer := client.NewClient()
-	router.GET("/spam", func(ctx *gin.Context) {
-		spammer.Spam()
-	})
+	//spammer := wsclient.NewClient()
+	//router.GET("/spam", func(ctx *gin.Context) {
+	//	spammer.Spam()
+	//})
 
 	httpServe(router, "", "8080")
+	cancel()
 
-	close(done)
 	<-cancelled
+
+	logrus.Warn("application stopped")
 }
 
 func httpServe(router *gin.Engine, host, port string) {
