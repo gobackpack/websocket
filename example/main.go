@@ -66,7 +66,10 @@ func main() {
 				select {
 				case msg := <-client.OnMessage:
 					logrus.Infof("client %s received message: %s", client.ConnectionId, msg)
-					hub.SendToGroup(groupId, msg)
+					// let's spam it :)
+					for i := 0; i < 1000; i++ {
+						go hub.SendToGroup(groupId, msg)
+					}
 				case err := <-client.OnError:
 					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
 					return
