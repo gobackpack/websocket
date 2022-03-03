@@ -33,6 +33,8 @@ type Hub struct {
 	broadcastToAllGroups     chan *Frame
 	broadcastToConnection    chan *Frame
 	broadcastToOthersInGroup chan *Frame
+
+	lock sync.RWMutex
 }
 
 type Group struct {
@@ -65,10 +67,10 @@ func NewHub() *Hub {
 		connect:                  make(chan *Client),
 		disconnect:               make(chan *Client),
 		clientGoingAway:          make(chan *Client),
-		broadcastToGroup:         make(chan *Frame, 0),
-		broadcastToAllGroups:     make(chan *Frame, 0),
-		broadcastToConnection:    make(chan *Frame, 0),
-		broadcastToOthersInGroup: make(chan *Frame, 0),
+		broadcastToGroup:         make(chan *Frame),
+		broadcastToAllGroups:     make(chan *Frame),
+		broadcastToConnection:    make(chan *Frame),
+		broadcastToOthersInGroup: make(chan *Frame),
 	}
 }
 
