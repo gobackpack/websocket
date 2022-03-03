@@ -55,19 +55,20 @@ func main() {
 
 		client.OnError = make(chan error)
 		client.OnMessage = make(chan []byte)
-		clientCtx, clientCancel := context.WithCancel(context.Background())
+		clientCtx, clientCancel := context.WithCancel(hubCtx)
 
 		clientCancelled := client.ReadMessages(clientCtx)
 
 		go func(clientCancel context.CancelFunc, client *websocket.Client) {
+			defer clientCancel()
+
 			for {
 				select {
 				case msg := <-client.OnMessage:
 					logrus.Infof("client %s received message: %s", client.ConnectionId, msg)
-					break
+					hub.SendToGroup(groupId, msg)
 				case err := <-client.OnError:
 					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
-					clientCancel()
 					return
 				}
 			}

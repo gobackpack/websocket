@@ -258,7 +258,7 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 func (hub *Hub) sendToGroup(groupId string, msg []byte) {
 	if group := hub.group(groupId); group != nil {
 		for _, client := range group.Clients {
-			go func(client *Client) {
+			go func(client *Client, msg []byte) {
 				if err := client.write(TextMessage, msg); err != nil {
 					//logrus.Error("broadcastToGroup failed: ", err)
 
@@ -269,7 +269,7 @@ func (hub *Hub) sendToGroup(groupId string, msg []byte) {
 
 					return
 				}
-			}(client)
+			}(client, msg)
 		}
 	}
 }
