@@ -33,8 +33,6 @@ type Hub struct {
 	broadcastToAllGroups     chan *Frame
 	broadcastToConnection    chan *Frame
 	broadcastToOthersInGroup chan *Frame
-
-	lock sync.RWMutex
 }
 
 type Group struct {
@@ -50,7 +48,8 @@ type Client struct {
 	OnError   chan error  `json:"-"`
 
 	connection *websocketLib.Conn
-	lock       sync.RWMutex
+	lockR      sync.RWMutex
+	lockW      sync.RWMutex
 }
 
 type Frame struct {
@@ -357,15 +356,15 @@ func (hub *Hub) group(groupId string) *Group {
 }
 
 func (client *Client) read() (int, []byte, error) {
-	client.lock.Lock()
-	defer client.lock.Unlock()
+	client.lockR.Lock()
+	defer client.lockR.Unlock()
 
 	return client.connection.ReadMessage()
 }
 
 func (client *Client) write(messageType int, data []byte) error {
-	client.lock.Lock()
-	defer client.lock.Unlock()
+	client.lockW.Lock()
+	defer client.lockW.Unlock()
 
 	return client.connection.WriteMessage(messageType, data)
 }
