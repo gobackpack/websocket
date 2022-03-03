@@ -20,7 +20,7 @@ func main() {
 
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
-	router.LoadHTMLFiles("index.html")
+	router.LoadHTMLFiles("example/index.html")
 
 	pprof.Register(router)
 
