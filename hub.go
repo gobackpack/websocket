@@ -44,9 +44,8 @@ type Client struct {
 	OnMessage chan []byte `json:"-"`
 	OnError   chan error  `json:"-"`
 
-	connection       *websocketLib.Conn
-	stoppedListening chan bool
-	lock             sync.RWMutex
+	connection *websocketLib.Conn
+	lock       sync.RWMutex
 }
 
 type Group struct {
@@ -114,8 +113,8 @@ func (hub *Hub) ListenConnections(ctx context.Context) chan bool {
 	return cancelled
 }
 
-func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, groupId, connectionId string) (*Client, error) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func (hub *Hub) EstablishConnection(writer http.ResponseWriter, request *http.Request, groupId, connectionId string) (*Client, error) {
+	conn, err := upgrader.Upgrade(writer, request, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -125,15 +124,12 @@ func (hub *Hub) EstablishConnection(w http.ResponseWriter, r *http.Request, grou
 	}
 
 	client := &Client{
-		GroupId:          groupId,
-		ConnectionId:     connectionId,
-		connection:       conn,
-		stoppedListening: make(chan bool),
+		GroupId:      groupId,
+		ConnectionId: connectionId,
+		connection:   conn,
 	}
 
 	hub.connect <- client
-
-	go client.readMessages(hub.clientGoingAway)
 
 	return client, nil
 }
@@ -188,6 +184,36 @@ func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
 	hub.broadcastToOthersInGroup <- frame
 }
 
+func (client *Client) ReadMessages(ctx context.Context) chan bool {
+	cancelled := make(chan bool)
+
+	go func() {
+		defer func() {
+			cancelled <- true
+		}()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				_, msg, err := client.read()
+				if err != nil {
+					if client.OnError != nil {
+						client.OnError <- err
+					}
+				}
+
+				if client.OnMessage != nil {
+					client.OnMessage <- msg
+				}
+			}
+		}
+	}()
+
+	return cancelled
+}
+
 func (hub *Hub) assignClientToGroup(client *Client) {
 	var group *Group
 
@@ -216,8 +242,6 @@ func (hub *Hub) disconnectClientFromGroup(groupId, connectionId string) {
 					logrus.Errorf("client [%v] from group [%v] failed to close websocket connection: [%v]", connectionId, groupId, err)
 					return
 				}
-
-				<-group.Clients[i].stoppedListening
 
 				logrus.Warnf("client [%v] from group [%v] closed websocket connection", connectionId, groupId)
 
@@ -330,37 +354,6 @@ func (hub *Hub) group(groupId string) *Group {
 	}
 
 	return nil
-}
-
-func (client *Client) readMessages(clientGoingAway chan *Client) {
-	defer func() {
-		logrus.Warnf("client [%v] from group [%v] stopped reading websocket messages",
-			client.ConnectionId, client.GroupId)
-
-		client.stoppedListening <- true
-	}()
-
-	for {
-		_, msg, err := client.read()
-		if err != nil {
-			if client.OnError != nil {
-				client.OnError <- err
-			}
-
-			if errGoingAway(err) || errAbnormalClose(err) {
-				clientGoingAway <- &Client{
-					GroupId:      client.GroupId,
-					ConnectionId: client.ConnectionId,
-				}
-			}
-
-			break
-		}
-
-		if client.OnMessage != nil {
-			client.OnMessage <- msg
-		}
-	}
 }
 
 func (client *Client) read() (int, []byte, error) {

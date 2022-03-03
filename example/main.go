@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
@@ -12,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -34,8 +32,8 @@ func main() {
 
 	hub := websocket.NewHub()
 
-	ctxMain, cancel := context.WithCancel(context.Background())
-	cancelled := hub.ListenConnections(ctxMain)
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	hubCancelled := hub.ListenConnections(hubCtx)
 
 	// connect client to group
 	router.GET("/ws/:groupId", func(c *gin.Context) {
@@ -45,11 +43,41 @@ func main() {
 		// find your own way to return client.ConnectionId to frontend
 		// client.ConnectionId is required for manual /disconnect
 
-		_, err := hub.EstablishConnection(c.Writer, c.Request, groupId, "")
+		client, err := hub.EstablishConnection(c.Writer, c.Request, groupId, "")
 		if err != nil {
 			logrus.Errorf("failed to establish connection with groupId -> %s: %s", groupId, err)
 			return
 		}
+
+		client.OnError = make(chan error)
+		client.OnMessage = make(chan []byte)
+		clientCtx, clientCancel := context.WithCancel(hubCtx)
+
+		clientCancelled := client.ReadMessages(clientCtx)
+
+		go func(clientCancel context.CancelFunc) {
+			for {
+				select {
+				case msg := <-client.OnMessage:
+					logrus.Infof("client %s received message: %s", client.ConnectionId, msg)
+					break
+				case err := <-client.OnError:
+					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
+					break
+					//clientCancel() // we choose when to stop reading messages from ws
+					//return
+				case <-time.After(5 * time.Second):
+					clientCancel() // only simulation to stop reading messages from ws
+					return
+				}
+			}
+		}(clientCancel)
+
+		logrus.Infof("client %s listening for messages...", client.ConnectionId)
+
+		<-clientCancelled
+
+		logrus.Warnf("client %s stopped reading messages from ws", client.ConnectionId)
 	})
 
 	// disconnect client from group
@@ -74,38 +102,32 @@ func main() {
 		c.JSON(http.StatusOK, hub.Groups)
 	})
 
-	// examples
-	router.POST("/sendMessage", func(c *gin.Context) {
-		groupId := c.GetHeader("group_id")
-		if strings.TrimSpace(groupId) == "" {
-			c.JSON(http.StatusBadRequest, "missing group_id from headers")
-			return
-		}
-
-		wg := sync.WaitGroup{}
-
-		wg.Add(100)
-		for i := 0; i < 100; i++ {
-			go func(wg *sync.WaitGroup) {
-				hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
-				wg.Done()
-			}(&wg)
-		}
-
-		wg.Wait()
-
-		logrus.Info("all messages sent")
-	})
-
-	//spammer := wsclient.NewClient()
-	//router.GET("/spam", func(ctx *gin.Context) {
-	//	spammer.Spam()
+	//router.POST("/sendMessage", func(c *gin.Context) {
+	//	groupId := c.GetHeader("group_id")
+	//	if strings.TrimSpace(groupId) == "" {
+	//		c.JSON(http.StatusBadRequest, "missing group_id from headers")
+	//		return
+	//	}
+	//
+	//	wg := sync.WaitGroup{}
+	//
+	//	wg.Add(100)
+	//	for i := 0; i < 100; i++ {
+	//		go func(wg *sync.WaitGroup) {
+	//			hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
+	//			wg.Done()
+	//		}(&wg)
+	//	}
+	//
+	//	wg.Wait()
+	//
+	//	logrus.Info("all messages sent")
 	//})
 
 	httpServe(router, "", "8080")
-	cancel()
+	hubCancel()
 
-	<-cancelled
+	<-hubCancelled
 
 	logrus.Warn("application stopped")
 }

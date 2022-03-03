@@ -25,6 +25,7 @@
                 if (!msg.value) {
                     return false;
                 }
+                console.log("sending message: " + msg.value);
                 conn.send(msg.value);
                 msg.value = "";
                 return false;
