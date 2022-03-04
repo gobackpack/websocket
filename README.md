@@ -30,8 +30,8 @@ go func (clientCancel context.CancelFunc, client *websocket.Client) {
         select {
         case msg := <-client.OnMessage:
             logrus.Infof("client %s received message: %s", client.ConnectionId, msg)
-			// optionally pass message to other connections, groups...
-			hub.SendToGroup(groupId, msg)
+            // optionally pass message to other connections, groups...
+            hub.SendToGroup(groupId, msg)
         case err := <-client.OnError:
             logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
             return
