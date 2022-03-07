@@ -40,6 +40,7 @@ go func (clientCancel context.CancelFunc, client *websocket.Client) {
 }(clientCancel, client)
 
 <-clientFinished
+close(clientFinished)
 
 // send message
 hub.SendToGroup(groupId, []byte("message to group"))
@@ -56,6 +57,7 @@ hub.DisconnectFromGroup(groupId, connectionId)
 // close
 hubCancel()
 <-hubFinished
+close(hubFinished)
 ```
 
 ![image](https://user-images.githubusercontent.com/8428635/119730949-a181f880-be76-11eb-9dcd-f4952342f3b8.png)

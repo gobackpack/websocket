@@ -80,6 +80,7 @@ func main() {
 		logrus.Infof("client %s listening for messages...", client.ConnectionId)
 
 		<-clientFinished
+		close(clientFinished)
 
 		logrus.Warnf("client %s stopped reading messages from ws", client.ConnectionId)
 	})
@@ -132,6 +133,7 @@ func main() {
 	hubCancel()
 
 	<-hubFinished
+	close(hubFinished)
 
 	logrus.Warn("application stopped")
 }
