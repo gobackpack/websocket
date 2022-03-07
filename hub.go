@@ -74,12 +74,12 @@ func NewHub() *Hub {
 	}
 }
 
-func (hub *Hub) ListenConnections(ctx context.Context) chan bool {
-	cancelled := make(chan bool)
+func (hub *Hub) ListenForConnections(ctx context.Context) chan bool {
+	finished := make(chan bool)
 
 	go func(ctx context.Context) {
 		defer func() {
-			cancelled <- true
+			finished <- true
 		}()
 
 		for {
@@ -111,7 +111,7 @@ func (hub *Hub) ListenConnections(ctx context.Context) chan bool {
 		}
 	}(ctx)
 
-	return cancelled
+	return finished
 }
 
 func (hub *Hub) EstablishConnection(writer http.ResponseWriter, request *http.Request, groupId, connectionId string) (*Client, error) {
@@ -186,11 +186,11 @@ func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
 }
 
 func (client *Client) ReadMessages(ctx context.Context) chan bool {
-	cancelled := make(chan bool)
+	finished := make(chan bool)
 
 	go func() {
 		defer func() {
-			cancelled <- true
+			finished <- true
 		}()
 
 		for {
@@ -212,7 +212,7 @@ func (client *Client) ReadMessages(ctx context.Context) chan bool {
 		}
 	}()
 
-	return cancelled
+	return finished
 }
 
 func (hub *Hub) assignClientToGroup(client *Client) {

@@ -13,7 +13,7 @@ func BenchmarkHub_SendToGroup(b *testing.B) {
 	hub := websocket.NewHub()
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
-	cancelled := hub.ListenConnections(hubCtx)
+	cancelled := hub.ListenForConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +44,7 @@ func BenchmarkHub_SendToAllGroups(b *testing.B) {
 	hub := websocket.NewHub()
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
-	cancelled := hub.ListenConnections(hubCtx)
+	cancelled := hub.ListenForConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +68,7 @@ func BenchmarkHub_SendToConnectionId(b *testing.B) {
 	hub := websocket.NewHub()
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
-	cancelled := hub.ListenConnections(hubCtx)
+	cancelled := hub.ListenForConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +92,7 @@ func BenchmarkHub_SendToOthersInGroup(b *testing.B) {
 	hub := websocket.NewHub()
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
-	cancelled := hub.ListenConnections(hubCtx)
+	cancelled := hub.ListenForConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +116,7 @@ func BenchmarkHub_EstablishConnection(b *testing.B) {
 	hub := websocket.NewHub()
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
-	cancelled := hub.ListenConnections(hubCtx)
+	cancelled := hub.ListenForConnections(hubCtx)
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

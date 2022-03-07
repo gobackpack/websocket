@@ -7,7 +7,7 @@ Usage
 hub := websocket.NewHub()
 
 hubCtx, hubCancel := context.WithCancel(context.Background())
-hubCancelled := hub.ListenConnections(hubCtx)
+hubFinished := hub.ListenConnections(hubCtx)
 
 // create client and establish connection with ws hub
 client, err := hub.EstablishConnection(c.Writer, c.Request, groupId, connId)
@@ -20,7 +20,7 @@ client.OnError = make(chan error)
 client.OnMessage = make(chan []byte)
 clientCtx, clientCancel := context.WithCancel(hubCtx)
 
-clientCancelled := client.ReadMessages(clientCtx)
+clientFinished := client.ReadMessages(clientCtx)
 
 // handle messages
 go func (clientCancel context.CancelFunc, client *websocket.Client) {
@@ -39,7 +39,7 @@ go func (clientCancel context.CancelFunc, client *websocket.Client) {
     }
 }(clientCancel, client)
 
-<-clientCancelled
+<-clientFinished
 
 // send message
 hub.SendToGroup(groupId, []byte("message to group"))
@@ -55,7 +55,7 @@ hub.DisconnectFromGroup(groupId, connectionId)
 
 // close
 hubCancel()
-<-hubCancelled
+<-hubFinished
 ```
 
 ![image](https://user-images.githubusercontent.com/8428635/119730949-a181f880-be76-11eb-9dcd-f4952342f3b8.png)

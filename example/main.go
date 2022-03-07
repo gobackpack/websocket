@@ -33,7 +33,7 @@ func main() {
 	hub := websocket.NewHub()
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
-	hubCancelled := hub.ListenConnections(hubCtx)
+	hubFinished := hub.ListenForConnections(hubCtx)
 
 	// connect client to group
 	router.GET("/ws/:groupId", func(c *gin.Context) {
@@ -57,7 +57,7 @@ func main() {
 		client.OnMessage = make(chan []byte)
 		clientCtx, clientCancel := context.WithCancel(hubCtx)
 
-		clientCancelled := client.ReadMessages(clientCtx)
+		clientFinished := client.ReadMessages(clientCtx)
 
 		go func(clientCancel context.CancelFunc, client *websocket.Client) {
 			defer clientCancel()
@@ -79,7 +79,7 @@ func main() {
 
 		logrus.Infof("client %s listening for messages...", client.ConnectionId)
 
-		<-clientCancelled
+		<-clientFinished
 
 		logrus.Warnf("client %s stopped reading messages from ws", client.ConnectionId)
 	})
@@ -131,7 +131,7 @@ func main() {
 	httpServe(router, "", "8080")
 	hubCancel()
 
-	<-hubCancelled
+	<-hubFinished
 
 	logrus.Warn("application stopped")
 }
