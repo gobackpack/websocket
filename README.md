@@ -31,7 +31,7 @@ go func (clientCancel context.CancelFunc, client *websocket.Client) {
         case msg := <-client.OnMessage:
             logrus.Infof("client %s received message: %s", client.ConnectionId, msg)
             // optionally pass message to other connections, groups...
-            hub.SendToGroup(groupId, msg)
+            go hub.SendToGroup(groupId, msg)
         case err := <-client.OnError:
             logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
             return
@@ -43,13 +43,13 @@ go func (clientCancel context.CancelFunc, client *websocket.Client) {
 close(clientFinished)
 
 // send message
-hub.SendToGroup(groupId, []byte("message to group"))
+go hub.SendToGroup(groupId, []byte("message to group"))
 
-hub.SendToAllGroups([]byte("message to all groups"))
+go hub.SendToAllGroups([]byte("message to all groups"))
 
-hub.SendToConnectionId(groupId, connectionId, []byte("message to connection"))
+go hub.SendToConnectionId(groupId, connectionId, []byte("message to connection"))
 
-hub.SendToOthersInGroup(groupId, client.ConnectionId, []byte("message to all connections from my group except myself"))
+go hub.SendToOthersInGroup(groupId, client.ConnectionId, []byte("message to all connections from my group except myself"))
 
 // disconnect
 hub.DisconnectFromGroup(groupId, connectionId)

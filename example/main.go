@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -107,27 +109,27 @@ func main() {
 		c.JSON(http.StatusOK, hub.Groups)
 	})
 
-	//router.POST("/sendMessage", func(c *gin.Context) {
-	//	groupId := c.GetHeader("group_id")
-	//	if strings.TrimSpace(groupId) == "" {
-	//		c.JSON(http.StatusBadRequest, "missing group_id from headers")
-	//		return
-	//	}
-	//
-	//	wg := sync.WaitGroup{}
-	//
-	//	wg.Add(100)
-	//	for i := 0; i < 100; i++ {
-	//		go func(wg *sync.WaitGroup) {
-	//			hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
-	//			wg.Done()
-	//		}(&wg)
-	//	}
-	//
-	//	wg.Wait()
-	//
-	//	logrus.Info("all messages sent")
-	//})
+	router.POST("/sendMessage", func(c *gin.Context) {
+		groupId := c.GetHeader("group_id")
+		if strings.TrimSpace(groupId) == "" {
+			c.JSON(http.StatusBadRequest, "missing group_id from headers")
+			return
+		}
+
+		wg := sync.WaitGroup{}
+
+		wg.Add(100)
+		for i := 0; i < 100; i++ {
+			go func(wg *sync.WaitGroup) {
+				hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
+				wg.Done()
+			}(&wg)
+		}
+
+		wg.Wait()
+
+		logrus.Info("all messages sent")
+	})
 
 	httpServe(router, "", "8080")
 	hubCancel()
