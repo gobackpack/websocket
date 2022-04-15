@@ -72,7 +72,7 @@ func main() {
 					for i := 0; i < 1000; i++ {
 						go hub.SendToGroup(groupId, msg)
 					}
-				case err := <-client.OnError:
+				case err = <-client.OnError:
 					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
 					return
 				}
@@ -82,7 +82,6 @@ func main() {
 		logrus.Infof("client %s listening for messages...", client.ConnectionId)
 
 		<-clientFinished
-		close(clientFinished)
 
 		logrus.Warnf("client %s stopped reading messages from ws", client.ConnectionId)
 	})
@@ -135,7 +134,6 @@ func main() {
 	hubCancel()
 
 	<-hubFinished
-	close(hubFinished)
 
 	logrus.Warn("application stopped")
 }
