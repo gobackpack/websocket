@@ -188,7 +188,7 @@ func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
 func (client *Client) ReadMessages(ctx context.Context) chan bool {
 	finished := make(chan bool)
 
-	go func() {
+	go func(ctx context.Context) {
 		defer func() {
 			finished <- true
 		}()
@@ -210,7 +210,7 @@ func (client *Client) ReadMessages(ctx context.Context) chan bool {
 				}
 			}
 		}
-	}()
+	}(ctx)
 
 	return finished
 }
