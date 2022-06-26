@@ -29,10 +29,10 @@ type Hub struct {
 	connect                  chan *Client
 	disconnect               chan *Client
 	clientGoingAway          chan *Client
-	broadcastToGroup         chan *Frame
-	broadcastToAllGroups     chan *Frame
-	broadcastToConnection    chan *Frame
-	broadcastToOthersInGroup chan *Frame
+	broadcastToGroup         chan *frame
+	broadcastToAllGroups     chan *frame
+	broadcastToConnection    chan *frame
+	broadcastToOthersInGroup chan *frame
 
 	lock sync.RWMutex
 }
@@ -54,7 +54,7 @@ type Client struct {
 	lockW      sync.RWMutex
 }
 
-type Frame struct {
+type frame struct {
 	GroupId      string    `json:"group_id"`
 	ConnectionId string    `json:"connection_id"`
 	Content      []byte    `json:"content"`
@@ -67,10 +67,10 @@ func NewHub() *Hub {
 		connect:                  make(chan *Client),
 		disconnect:               make(chan *Client),
 		clientGoingAway:          make(chan *Client),
-		broadcastToGroup:         make(chan *Frame),
-		broadcastToAllGroups:     make(chan *Frame),
-		broadcastToConnection:    make(chan *Frame),
-		broadcastToOthersInGroup: make(chan *Frame),
+		broadcastToGroup:         make(chan *frame),
+		broadcastToAllGroups:     make(chan *frame),
+		broadcastToConnection:    make(chan *frame),
+		broadcastToOthersInGroup: make(chan *frame),
 	}
 }
 
@@ -91,17 +91,17 @@ func (hub *Hub) ListenForConnections(ctx context.Context) chan bool {
 			case client := <-hub.clientGoingAway: // user closed tab - going away
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
-			case frame := <-hub.broadcastToGroup:
-				hub.sendToGroup(frame.GroupId, frame.Content)
+			case fr := <-hub.broadcastToGroup:
+				hub.sendToGroup(fr.GroupId, fr.Content)
 				break
-			case frame := <-hub.broadcastToAllGroups:
-				hub.sendToAllGroups(frame.Content)
+			case fr := <-hub.broadcastToAllGroups:
+				hub.sendToAllGroups(fr.Content)
 				break
-			case frame := <-hub.broadcastToConnection:
-				hub.sendToConnection(frame.GroupId, frame.ConnectionId, frame.Content)
+			case fr := <-hub.broadcastToConnection:
+				hub.sendToConnection(fr.GroupId, fr.ConnectionId, fr.Content)
 				break
-			case frame := <-hub.broadcastToOthersInGroup:
-				hub.sendToOthersInGroup(frame.GroupId, frame.ConnectionId, frame.Content)
+			case fr := <-hub.broadcastToOthersInGroup:
+				hub.sendToOthersInGroup(fr.GroupId, fr.ConnectionId, fr.Content)
 				break
 			case <-ctx.Done():
 				return
@@ -141,7 +141,7 @@ func (hub *Hub) DisconnectFromGroup(groupId, connectionId string) {
 }
 
 func (hub *Hub) SendToGroup(groupId string, msg []byte) {
-	hub.broadcastToGroup <- &Frame{
+	hub.broadcastToGroup <- &frame{
 		GroupId: groupId,
 		Content: msg,
 		Time:    time.Now(),
@@ -149,14 +149,14 @@ func (hub *Hub) SendToGroup(groupId string, msg []byte) {
 }
 
 func (hub *Hub) SendToAllGroups(msg []byte) {
-	hub.broadcastToAllGroups <- &Frame{
+	hub.broadcastToAllGroups <- &frame{
 		Content: msg,
 		Time:    time.Now(),
 	}
 }
 
 func (hub *Hub) SendToConnectionId(groupId, connectionId string, msg []byte) {
-	hub.broadcastToConnection <- &Frame{
+	hub.broadcastToConnection <- &frame{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
 		Content:      msg,
@@ -165,7 +165,7 @@ func (hub *Hub) SendToConnectionId(groupId, connectionId string, msg []byte) {
 }
 
 func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
-	hub.broadcastToOthersInGroup <- &Frame{
+	hub.broadcastToOthersInGroup <- &frame{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
 		Content:      msg,
