@@ -117,6 +117,7 @@ func main() {
 		c.JSON(http.StatusOK, hub.Groups)
 	})
 
+	// send messages from backend
 	router.POST("/sendMessage", func(c *gin.Context) {
 		groupId := c.GetHeader("group_id")
 		if strings.TrimSpace(groupId) == "" {
