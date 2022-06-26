@@ -28,7 +28,6 @@ type Hub struct {
 
 	connect                  chan *Client
 	disconnect               chan *Client
-	clientGoingAway          chan *Client
 	broadcastToGroup         chan *frame
 	broadcastToAllGroups     chan *frame
 	broadcastToConnection    chan *frame
@@ -67,7 +66,6 @@ func NewHub() *Hub {
 		Groups:                   make([]*Group, 0),
 		connect:                  make(chan *Client),
 		disconnect:               make(chan *Client),
-		clientGoingAway:          make(chan *Client),
 		broadcastToGroup:         make(chan *frame),
 		broadcastToAllGroups:     make(chan *frame),
 		broadcastToConnection:    make(chan *frame),
@@ -86,10 +84,7 @@ func (hub *Hub) ListenForConnections(ctx context.Context) chan bool {
 			case client := <-hub.connect:
 				hub.assignClientToGroup(client)
 				break
-			case client := <-hub.disconnect: // user requested disconnect
-				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
-				break
-			case client := <-hub.clientGoingAway: // user closed tab - going away
+			case client := <-hub.disconnect:
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
 				break
 			case fr := <-hub.broadcastToGroup:
@@ -253,8 +248,6 @@ func (hub *Hub) sendToGroup(groupId string, msg []byte) {
 		for _, client := range group.Clients {
 			go func(client *Client, msg []byte) {
 				if err := client.write(TextMessage, msg); err != nil {
-					//logrus.Error("broadcastToGroup failed: ", err)
-
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
 						hub.disconnect <- client
@@ -269,21 +262,20 @@ func (hub *Hub) sendToGroup(groupId string, msg []byte) {
 
 func (hub *Hub) sendToAllGroups(msg []byte) {
 	for _, group := range hub.Groups {
-		// NOTE: if necessary each group can be processed concurrently
-		for _, client := range group.Clients {
-			go func(client *Client) {
-				if err := client.write(TextMessage, msg); err != nil {
-					//logrus.Error("broadcastToAllGroups failed: ", err)
+		go func(group *Group) {
+			for _, client := range group.Clients {
+				go func(client *Client) {
+					if err := client.write(TextMessage, msg); err != nil {
+						if errBrokenPipe(err) {
+							logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
+							hub.disconnect <- client
+						}
 
-					if errBrokenPipe(err) {
-						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
-						hub.disconnect <- client
+						return
 					}
-
-					return
-				}
-			}(client)
-		}
+				}(client)
+			}
+		}(group)
 	}
 }
 
@@ -291,8 +283,6 @@ func (hub *Hub) sendToConnection(groupId, connectionId string, msg []byte) {
 	if client := hub.client(groupId, connectionId); client != nil {
 		go func() {
 			if err := client.write(TextMessage, msg); err != nil {
-				//logrus.Error("broadcastToConnection failed: ", err)
-
 				if errBrokenPipe(err) {
 					logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
 					hub.disconnect <- client
@@ -313,8 +303,6 @@ func (hub *Hub) sendToOthersInGroup(groupId, connectionId string, msg []byte) {
 
 			go func(client *Client) {
 				if err := client.write(TextMessage, msg); err != nil {
-					//logrus.Error("broadcastToOthersInGroup failed: ", err)
-
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
 						hub.disconnect <- client
