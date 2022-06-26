@@ -114,7 +114,7 @@ func (hub *Hub) EstablishConnection(writer http.ResponseWriter, request *http.Re
 		connectionId = uuid.New().String()
 	}
 
-	if existingClient := hub.client(groupId, connectionId); existingClient != nil {
+	if hub.client(groupId, connectionId) != nil {
 		return nil, errors.New(fmt.Sprintf("client %s already exists", connectionId))
 	}
 
