@@ -362,5 +362,5 @@ func errAbnormalClose(err error) bool {
 }
 
 func lostConnection(err error) bool {
-	return errGoingAway(err) || errConnClosed(err) || errBrokenPipe(err) || errAbnormalClose(err)
+	return errBrokenPipe(err) || errConnClosed(err) || errGoingAway(err) || errAbnormalClose(err)
 }
