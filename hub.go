@@ -45,9 +45,9 @@ type Client struct {
 	GroupId      string
 	ConnectionId string
 
-	OnMessage chan []byte `json:"-"`
-	OnError   chan error  `json:"-"`
-	GoingAway chan error  `json:"-"`
+	OnMessage      chan []byte `json:"-"`
+	OnError        chan error  `json:"-"`
+	LostConnection chan error  `json:"-"`
 
 	connection *websocketLib.Conn
 	lockR      sync.RWMutex
@@ -176,8 +176,8 @@ func (client *Client) ReadMessages(ctx context.Context) chan bool {
 			default:
 				_, msg, err := client.read()
 				if err != nil {
-					if errGoingAway(err) && client.GoingAway != nil {
-						client.GoingAway <- err
+					if lostConnection(err) && client.LostConnection != nil {
+						client.LostConnection <- err
 						continue
 					}
 
@@ -359,4 +359,8 @@ func errGoingAway(err error) bool {
 
 func errAbnormalClose(err error) bool {
 	return strings.Contains(err.Error(), "close 1006 (abnormal closure): unexpected EOF")
+}
+
+func lostConnection(err error) bool {
+	return errGoingAway(err) || errConnClosed(err) || errBrokenPipe(err) || errAbnormalClose(err)
 }

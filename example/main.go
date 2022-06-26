@@ -62,7 +62,7 @@ func main() {
 
 		client.OnError = make(chan error)
 		client.OnMessage = make(chan []byte)
-		client.GoingAway = make(chan error)
+		client.LostConnection = make(chan error)
 
 		clientCtx, clientCancel := context.WithCancel(hubCtx)
 		clientFinished := client.ReadMessages(clientCtx)
@@ -81,7 +81,7 @@ func main() {
 					}
 				case err = <-client.OnError:
 					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
-				case err = <-client.GoingAway:
+				case err = <-client.LostConnection:
 					hub.DisconnectFromGroup(client.GroupId, client.ConnectionId)
 					return
 				}
@@ -124,14 +124,26 @@ func main() {
 			return
 		}
 
+		connId := c.GetHeader("connection_id")
+
 		wg := sync.WaitGroup{}
 
 		wg.Add(100)
-		for i := 0; i < 100; i++ {
-			go func(wg *sync.WaitGroup) {
-				hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
-				wg.Done()
-			}(&wg)
+
+		if connId != "" {
+			for i := 0; i < 100; i++ {
+				go func(wg *sync.WaitGroup) {
+					hub.SendToConnectionId(groupId, connId, []byte(fmt.Sprintf("groupId [%v] connId [%v]", groupId, connId)))
+					wg.Done()
+				}(&wg)
+			}
+		} else {
+			for i := 0; i < 100; i++ {
+				go func(wg *sync.WaitGroup) {
+					hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
+					wg.Done()
+				}(&wg)
+			}
 		}
 
 		wg.Wait()
