@@ -55,12 +55,19 @@ func main() {
 			return
 		}
 
+		// send generated connection id back to frontend
+		if connId == "" {
+			hub.SendToConnectionId(groupId, client.ConnectionId, []byte(fmt.Sprintf("connection_id: %s", client.ConnectionId)))
+		}
+
 		client.OnError = make(chan error)
 		client.OnMessage = make(chan []byte)
+		client.GoingAway = make(chan error)
 		clientCtx, clientCancel := context.WithCancel(hubCtx)
 
 		clientFinished := client.ReadMessages(clientCtx)
 
+		// handle messages from frontend
 		go func(clientCancel context.CancelFunc, client *websocket.Client) {
 			defer clientCancel()
 
@@ -74,6 +81,8 @@ func main() {
 					}
 				case err = <-client.OnError:
 					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
+				case err = <-client.GoingAway:
+					hub.DisconnectFromGroup(client.GroupId, client.ConnectionId)
 					return
 				}
 			}
@@ -138,7 +147,7 @@ func main() {
 	logrus.Warn("application stopped")
 }
 
-func httpServe(router *gin.Engine, host, port string) {
+func httpServe(router http.Handler, host, port string) {
 	addr := host + ":" + port
 
 	srv := &http.Server{

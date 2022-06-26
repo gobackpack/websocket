@@ -48,6 +48,7 @@ type Client struct {
 
 	OnMessage chan []byte `json:"-"`
 	OnError   chan error  `json:"-"`
+	GoingAway chan error  `json:"-"`
 
 	connection *websocketLib.Conn
 	lockR      sync.RWMutex
@@ -186,6 +187,11 @@ func (client *Client) ReadMessages(ctx context.Context) chan bool {
 			default:
 				_, msg, err := client.read()
 				if err != nil {
+					if errGoingAway(err) && client.GoingAway != nil {
+						client.GoingAway <- err
+						continue
+					}
+
 					if client.OnError != nil {
 						client.OnError <- err
 					}
