@@ -4,10 +4,55 @@ import (
 	"context"
 	"github.com/gobackpack/websocket"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+type mockConn struct{}
+
+func (conn *mockConn) ReadMessage() (int, []byte, error) {
+	return 0, nil, nil
+}
+func (conn *mockConn) WriteMessage(data []byte) error {
+	return nil
+}
+func (conn *mockConn) Close() error {
+	return nil
+}
+
+func TestNewHub(t *testing.T) {
+	hub := websocket.NewHub()
+
+	assert.NotNil(t, hub)
+	assert.NotNil(t, hub.Groups)
+	assert.Equal(t, 0, len(hub.Groups))
+}
+
+func TestHub_EstablishConnection(t *testing.T) {
+	hub := websocket.NewHub()
+	ctx, cancel := context.WithCancel(context.Background())
+	finished := hub.ListenForConnections(ctx)
+
+	mConn := &mockConn{}
+	client, err := hub.EstablishConnection(mConn, "1", "1")
+	assert.NoError(t, err)
+	assert.NotNil(t, client)
+
+	assert.Equal(t, 1, len(hub.Groups))
+	group := hub.Groups[0]
+	assert.NotNil(t, group)
+	assert.Equal(t, "1", group.Id)
+
+	assert.Equal(t, 1, len(group.Clients))
+	cl := group.Clients[0]
+	assert.NotNil(t, cl)
+	assert.Equal(t, "1", cl.ConnectionId)
+
+	cancel()
+	<-finished
+}
 
 func BenchmarkHub_SendToGroup(b *testing.B) {
 	hub := websocket.NewHub()
