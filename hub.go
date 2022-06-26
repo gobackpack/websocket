@@ -2,6 +2,8 @@ package websocket
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	websocketLib "github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -110,6 +112,10 @@ func (hub *Hub) EstablishConnection(writer http.ResponseWriter, request *http.Re
 
 	if strings.TrimSpace(connectionId) == "" {
 		connectionId = uuid.New().String()
+	}
+
+	if existingClient := hub.client(groupId, connectionId); existingClient != nil {
+		return nil, errors.New(fmt.Sprintf("client %s already exists", connectionId))
 	}
 
 	client := &Client{
