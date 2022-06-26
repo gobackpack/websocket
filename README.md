@@ -7,7 +7,7 @@ Usage
 hub := websocket.NewHub()
 
 hubCtx, hubCancel := context.WithCancel(context.Background())
-hubFinished := hub.ListenConnections(hubCtx)
+hubFinished := hub.ListenForConnections(hubCtx)
 
 // create client and establish connection with ws hub
 client, err := hub.EstablishConnection(c.Writer, c.Request, groupId, connId)
