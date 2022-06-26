@@ -18,6 +18,7 @@ if err != nil {
 
 client.OnError = make(chan error)
 client.OnMessage = make(chan []byte)
+client.GoingAway = make(chan error)
 clientCtx, clientCancel := context.WithCancel(hubCtx)
 
 clientFinished := client.ReadMessages(clientCtx)
@@ -34,6 +35,8 @@ go func (clientCancel context.CancelFunc, client *websocket.Client) {
             go hub.SendToGroup(groupId, msg)
         case err := <-client.OnError:
             logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
+        case err = <-client.GoingAway:
+            hub.DisconnectFromGroup(client.GroupId, client.ConnectionId)
             return
         }
     }

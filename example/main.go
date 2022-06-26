@@ -63,8 +63,8 @@ func main() {
 		client.OnError = make(chan error)
 		client.OnMessage = make(chan []byte)
 		client.GoingAway = make(chan error)
-		clientCtx, clientCancel := context.WithCancel(hubCtx)
 
+		clientCtx, clientCancel := context.WithCancel(hubCtx)
 		clientFinished := client.ReadMessages(clientCtx)
 
 		// handle messages from frontend
