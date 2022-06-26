@@ -83,22 +83,16 @@ func (hub *Hub) ListenForConnections(ctx context.Context) chan bool {
 			select {
 			case client := <-hub.connect:
 				hub.assignClientToGroup(client)
-				break
 			case client := <-hub.disconnect:
 				hub.disconnectClientFromGroup(client.GroupId, client.ConnectionId)
-				break
 			case fr := <-hub.broadcastToGroup:
 				hub.sendToGroup(fr.GroupId, fr.Content)
-				break
 			case fr := <-hub.broadcastToAllGroups:
 				hub.sendToAllGroups(fr.Content)
-				break
 			case fr := <-hub.broadcastToConnection:
 				hub.sendToConnection(fr.GroupId, fr.ConnectionId, fr.Content)
-				break
 			case fr := <-hub.broadcastToOthersInGroup:
 				hub.sendToOthersInGroup(fr.GroupId, fr.ConnectionId, fr.Content)
-				break
 			case <-ctx.Done():
 				return
 			}
