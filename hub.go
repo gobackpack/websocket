@@ -78,9 +78,7 @@ func (hub *Hub) ListenForConnections(ctx context.Context) chan bool {
 	finished := make(chan bool)
 
 	go func(ctx context.Context) {
-		defer func() {
-			finished <- true
-		}()
+		defer close(finished)
 
 		for {
 			select {
@@ -136,62 +134,50 @@ func (hub *Hub) EstablishConnection(writer http.ResponseWriter, request *http.Re
 }
 
 func (hub *Hub) DisconnectFromGroup(groupId, connectionId string) {
-	client := &Client{
+	hub.disconnect <- &Client{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
 	}
-
-	hub.disconnect <- client
 }
 
 func (hub *Hub) SendToGroup(groupId string, msg []byte) {
-	frame := &Frame{
+	hub.broadcastToGroup <- &Frame{
 		GroupId: groupId,
 		Content: msg,
 		Time:    time.Now(),
 	}
-
-	hub.broadcastToGroup <- frame
 }
 
 func (hub *Hub) SendToAllGroups(msg []byte) {
-	frame := &Frame{
+	hub.broadcastToAllGroups <- &Frame{
 		Content: msg,
 		Time:    time.Now(),
 	}
-
-	hub.broadcastToAllGroups <- frame
 }
 
 func (hub *Hub) SendToConnectionId(groupId, connectionId string, msg []byte) {
-	frame := &Frame{
+	hub.broadcastToConnection <- &Frame{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
 		Content:      msg,
 		Time:         time.Now(),
 	}
-
-	hub.broadcastToConnection <- frame
 }
 
 func (hub *Hub) SendToOthersInGroup(groupId, connectionId string, msg []byte) {
-	frame := &Frame{
+	hub.broadcastToOthersInGroup <- &Frame{
 		GroupId:      groupId,
 		ConnectionId: connectionId,
 		Content:      msg,
 		Time:         time.Now(),
 	}
-
-	hub.broadcastToOthersInGroup <- frame
 }
 
 func (client *Client) ReadMessages(ctx context.Context) chan bool {
 	finished := make(chan bool)
 
 	go func(ctx context.Context) {
-		defer func() {
-			finished <- true
-		}()
+		defer close(finished)
 
 		for {
 			select {
