@@ -5,16 +5,16 @@ import (
 	"net/http"
 )
 
-var upgrader = websocketLib.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
 type GorillaAdapter struct {
 	conn *websocketLib.Conn
 }
 
-func DefaultUpgradeConnection(writer http.ResponseWriter, request *http.Request) (*GorillaAdapter, error) {
+func NewGorillaConnectionAdapter(writer http.ResponseWriter, request *http.Request) (*GorillaAdapter, error) {
+	upgrader := websocketLib.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
+
 	conn, err := upgrader.Upgrade(writer, request, nil)
 
 	return &GorillaAdapter{

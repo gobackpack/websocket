@@ -49,7 +49,7 @@ func main() {
 		// find your own way to return client.ConnectionId to frontend
 		// client.ConnectionId is required for manual /disconnect
 
-		conn, err := websocket.DefaultUpgradeConnection(c.Writer, c.Request)
+		conn, err := websocket.NewGorillaConnectionAdapter(c.Writer, c.Request)
 		if err != nil {
 			logrus.Errorf("failed to upgrade connection: %s", err)
 			return

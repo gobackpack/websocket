@@ -10,7 +10,7 @@ hubCtx, hubCancel := context.WithCancel(context.Background())
 hubFinished := hub.ListenForConnections(hubCtx)
 
 // create client and establish connection with ws hub
-conn, err := websocket.DefaultUpgradeConnection(c.Writer, c.Request)
+conn, err := websocket.NewGorillaConnectionAdapter(c.Writer, c.Request)
 if err != nil {
     logrus.Errorf("failed to upgrade connection: %s", err)
     return
