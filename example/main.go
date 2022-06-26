@@ -49,7 +49,12 @@ func main() {
 		// find your own way to return client.ConnectionId to frontend
 		// client.ConnectionId is required for manual /disconnect
 
-		client, err := hub.EstablishConnection(c.Writer, c.Request, groupId, connId)
+		conn, err := websocket.DefaultUpgradeConnection(c.Writer, c.Request)
+		if err != nil {
+			logrus.Errorf("failed to upgrade connection: %s", err)
+			return
+		}
+		client, err := hub.EstablishConnection(conn, groupId, connId)
 		if err != nil {
 			logrus.Errorf("failed to establish connection with groupId -> %s: %s", groupId, err)
 			return

@@ -5,25 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	websocketLib "github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
 )
-
-const (
-	// TextMessage type
-	TextMessage = websocketLib.TextMessage
-	// BinaryMessage type
-	BinaryMessage = websocketLib.BinaryMessage
-)
-
-var upgrader = websocketLib.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
 
 type Hub struct {
 	Groups []*Group
@@ -51,9 +37,16 @@ type Client struct {
 	OnError        chan error  `json:"-"`
 	LostConnection chan error  `json:"-"`
 
-	connection *websocketLib.Conn
+	connection WsReadWriteCloser
 	lockR      sync.RWMutex
 	lockW      sync.RWMutex
+}
+
+// WsReadWriteCloser is responsible to read and write messages from websocket connection.
+type WsReadWriteCloser interface {
+	ReadMessage() (int, []byte, error)
+	WriteMessage(data []byte) error
+	Close() error
 }
 
 type frame struct {
@@ -104,12 +97,7 @@ func (hub *Hub) ListenForConnections(ctx context.Context) chan bool {
 	return finished
 }
 
-func (hub *Hub) EstablishConnection(writer http.ResponseWriter, request *http.Request, groupId, connectionId string) (*Client, error) {
-	conn, err := upgrader.Upgrade(writer, request, nil)
-	if err != nil {
-		return nil, err
-	}
-
+func (hub *Hub) EstablishConnection(conn WsReadWriteCloser, groupId, connectionId string) (*Client, error) {
 	if strings.TrimSpace(connectionId) == "" {
 		connectionId = uuid.New().String()
 	}
@@ -247,7 +235,7 @@ func (hub *Hub) sendToGroup(groupId string, msg []byte) {
 	if group := hub.group(groupId); group != nil {
 		for _, client := range group.Clients {
 			go func(client *Client, msg []byte) {
-				if err := client.write(TextMessage, msg); err != nil {
+				if err := client.write(msg); err != nil {
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
 						hub.disconnect <- client
@@ -265,7 +253,7 @@ func (hub *Hub) sendToAllGroups(msg []byte) {
 		go func(group *Group) {
 			for _, client := range group.Clients {
 				go func(client *Client) {
-					if err := client.write(TextMessage, msg); err != nil {
+					if err := client.write(msg); err != nil {
 						if errBrokenPipe(err) {
 							logrus.Warnf("client [%v] will be disconnected from group [%v]", client.ConnectionId, client.GroupId)
 							hub.disconnect <- client
@@ -282,7 +270,7 @@ func (hub *Hub) sendToAllGroups(msg []byte) {
 func (hub *Hub) sendToConnection(groupId, connectionId string, msg []byte) {
 	if client := hub.client(groupId, connectionId); client != nil {
 		go func() {
-			if err := client.write(TextMessage, msg); err != nil {
+			if err := client.write(msg); err != nil {
 				if errBrokenPipe(err) {
 					logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
 					hub.disconnect <- client
@@ -302,7 +290,7 @@ func (hub *Hub) sendToOthersInGroup(groupId, connectionId string, msg []byte) {
 			}
 
 			go func(client *Client) {
-				if err := client.write(TextMessage, msg); err != nil {
+				if err := client.write(msg); err != nil {
 					if errBrokenPipe(err) {
 						logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
 						hub.disconnect <- client
@@ -344,11 +332,11 @@ func (client *Client) read() (int, []byte, error) {
 	return client.connection.ReadMessage()
 }
 
-func (client *Client) write(messageType int, data []byte) error {
+func (client *Client) write(data []byte) error {
 	client.lockW.Lock()
 	defer client.lockW.Unlock()
 
-	return client.connection.WriteMessage(messageType, data)
+	return client.connection.WriteMessage(data)
 }
 
 func errBrokenPipe(err error) bool {

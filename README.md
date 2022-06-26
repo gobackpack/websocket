@@ -10,7 +10,12 @@ hubCtx, hubCancel := context.WithCancel(context.Background())
 hubFinished := hub.ListenForConnections(hubCtx)
 
 // create client and establish connection with ws hub
-client, err := hub.EstablishConnection(c.Writer, c.Request, groupId, connId)
+conn, err := websocket.DefaultUpgradeConnection(c.Writer, c.Request)
+if err != nil {
+    logrus.Errorf("failed to upgrade connection: %s", err)
+    return
+}
+client, err := hub.EstablishConnection(conn, groupId, connId)
 if err != nil {
     logrus.Errorf("failed to establish connection with groupId -> %s: %s", groupId, err)
     return
