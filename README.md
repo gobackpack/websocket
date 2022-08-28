@@ -1,5 +1,7 @@
 ![alt Go](https://img.shields.io/github/go-mod/go-version/gobackpack/websocket)
 
+Work in progress...
+
 Usage
 
 ```go
