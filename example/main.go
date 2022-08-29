@@ -74,7 +74,7 @@ func main() {
 				case err = <-client.OnError:
 					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
 				case err = <-client.LostConnection:
-					go hub.DisconnectFromGroup(client.GroupId, client.ConnectionId)
+					hub.DisconnectFromGroup(client.GroupId, client.ConnectionId)
 					return
 				}
 			}
@@ -101,7 +101,7 @@ func main() {
 			return
 		}
 
-		go hub.DisconnectFromGroup(groupId, connId)
+		hub.DisconnectFromGroup(groupId, connId)
 	})
 
 	// get all groups and clients

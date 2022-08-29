@@ -12,22 +12,13 @@ hubCtx, hubCancel := context.WithCancel(context.Background())
 hubFinished := hub.ListenForConnections(hubCtx)
 
 // create client and establish connection with ws hub
-conn, err := websocket.NewGorillaConnectionAdapter(c.Writer, c.Request)
-if err != nil {
-    logrus.Errorf("failed to upgrade connection: %s", err)
-    return
-}
-client, err := hub.EstablishConnection(conn, groupId, connId)
+client, err := hub.EstablishGorillaWsConnection(c.Writer, c.Request, groupId, connId)
 if err != nil {
     logrus.Errorf("failed to establish connection with groupId -> %s: %s", groupId, err)
     return
 }
 
-client.OnError = make(chan error)
-client.OnMessage = make(chan []byte)
-client.LostConnection = make(chan error)
 clientCtx, clientCancel := context.WithCancel(hubCtx)
-
 clientFinished := client.ReadMessages(clientCtx)
 
 // handle messages
@@ -38,7 +29,6 @@ go func (clientCancel context.CancelFunc, client *websocket.Client) {
         select {
         case msg := <-client.OnMessage:
             logrus.Infof("client %s received message: %s", client.ConnectionId, msg)
-            // optionally pass message to other connections, groups...
             go hub.SendToGroup(groupId, msg)
         case err := <-client.OnError:
             logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
@@ -67,10 +57,6 @@ hub.DisconnectFromGroup(groupId, connectionId)
 hubCancel()
 <-hubFinished
 ```
-
-![image](https://user-images.githubusercontent.com/8428635/119730949-a181f880-be76-11eb-9dcd-f4952342f3b8.png)
-
-![image](https://user-images.githubusercontent.com/8428635/119730888-8adba180-be76-11eb-8f29-019cd7d42792.png)
 
 #### Todo
 
