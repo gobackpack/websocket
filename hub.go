@@ -20,8 +20,6 @@ type Hub struct {
 	broadcastToAllGroups     chan *frame
 	broadcastToConnection    chan *frame
 	broadcastToOthersInGroup chan *frame
-
-	lock sync.RWMutex
 }
 
 type Group struct {
