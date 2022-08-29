@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/gobackpack/websocket"
@@ -12,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -46,28 +44,21 @@ func main() {
 		}
 
 		// NOTE: if connectionId is "", uuid will be automatically generated
-		// find your own way to return client.ConnectionId to frontend
+		// find your own way to return client.ConnectionId to frontend,
+		// normally userId from jwt will be used.
 		// client.ConnectionId is required for manual /disconnect
 
-		conn, err := websocket.NewGorillaConnectionAdapter(c.Writer, c.Request)
-		if err != nil {
-			logrus.Errorf("failed to upgrade connection: %s", err)
-			return
-		}
-		client, err := hub.EstablishConnection(conn, groupId, connId)
+		client, err := hub.EstablishGorillaWsConnection(c.Writer, c.Request, groupId, connId)
 		if err != nil {
 			logrus.Errorf("failed to establish connection with groupId -> %s: %s", groupId, err)
 			return
 		}
 
 		// send generated connection id back to frontend
+		// this means userId from jwt was not used, let frontend know about generated connId
 		if connId == "" {
-			hub.SendToConnectionId(groupId, client.ConnectionId, []byte(fmt.Sprintf("connection_id: %s", client.ConnectionId)))
+			hub.SendToConnectionId(groupId, client.ConnectionId, []byte(client.ConnectionId))
 		}
-
-		client.OnError = make(chan error)
-		client.OnMessage = make(chan []byte)
-		client.LostConnection = make(chan error)
 
 		clientCtx, clientCancel := context.WithCancel(hubCtx)
 		clientFinished := client.ReadMessages(clientCtx)
@@ -79,15 +70,11 @@ func main() {
 			for {
 				select {
 				case msg := <-client.OnMessage:
-					logrus.Infof("client %s received message: %s", client.ConnectionId, msg)
-					// let's spam it :)
-					for i := 0; i < 1000; i++ {
-						go hub.SendToGroup(groupId, msg)
-					}
+					go hub.SendToGroup(groupId, msg)
 				case err = <-client.OnError:
 					logrus.Errorf("client %s received error: %s", client.ConnectionId, err)
 				case err = <-client.LostConnection:
-					hub.DisconnectFromGroup(client.GroupId, client.ConnectionId)
+					go hub.DisconnectFromGroup(client.GroupId, client.ConnectionId)
 					return
 				}
 			}
@@ -114,47 +101,19 @@ func main() {
 			return
 		}
 
-		hub.DisconnectFromGroup(groupId, connId)
+		go hub.DisconnectFromGroup(groupId, connId)
 	})
 
 	// get all groups and clients
 	router.GET("/connections", func(c *gin.Context) {
-		c.JSON(http.StatusOK, hub.Groups)
+		c.JSON(http.StatusOK, hub.Groups())
 	})
 
-	// send messages from backend
-	router.POST("/sendMessage", func(c *gin.Context) {
-		groupId := c.GetHeader("group_id")
-		if strings.TrimSpace(groupId) == "" {
-			c.JSON(http.StatusBadRequest, "missing group_id from headers")
-			return
-		}
+	// get all groups and clients
+	router.GET("/connections/:groupId", func(c *gin.Context) {
+		groupId := c.Param("groupId")
 
-		connId := c.GetHeader("connection_id")
-
-		wg := sync.WaitGroup{}
-
-		wg.Add(100)
-
-		if connId != "" {
-			for i := 0; i < 100; i++ {
-				go func(wg *sync.WaitGroup) {
-					hub.SendToConnectionId(groupId, connId, []byte(fmt.Sprintf("groupId [%v] connId [%v]", groupId, connId)))
-					wg.Done()
-				}(&wg)
-			}
-		} else {
-			for i := 0; i < 100; i++ {
-				go func(wg *sync.WaitGroup) {
-					hub.SendToGroup(groupId, []byte(fmt.Sprintf("groupId [%v]", groupId)))
-					wg.Done()
-				}(&wg)
-			}
-		}
-
-		wg.Wait()
-
-		logrus.Info("all messages sent")
+		c.JSON(http.StatusOK, hub.Group(groupId))
 	})
 
 	httpServe(router, "", "8080")

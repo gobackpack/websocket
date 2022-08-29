@@ -26,8 +26,8 @@ func TestNewHub(t *testing.T) {
 	hub := websocket.NewHub()
 
 	assert.NotNil(t, hub)
-	assert.NotNil(t, hub.Groups)
-	assert.Equal(t, 0, len(hub.Groups))
+	assert.NotNil(t, hub.groups)
+	assert.Equal(t, 0, len(hub.groups))
 }
 
 func TestHub_EstablishConnection(t *testing.T) {
@@ -40,8 +40,8 @@ func TestHub_EstablishConnection(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 
-	assert.Equal(t, 1, len(hub.Groups))
-	group := hub.Groups[0]
+	assert.Equal(t, 1, len(hub.groups))
+	group := hub.groups[0]
 	assert.NotNil(t, group)
 	assert.Equal(t, "1", group.Id)
 

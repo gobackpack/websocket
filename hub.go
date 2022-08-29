@@ -12,7 +12,7 @@ import (
 )
 
 type Hub struct {
-	Groups []*Group
+	groups []*Group
 
 	connect                  chan *Client
 	disconnect               chan *Client
@@ -58,7 +58,7 @@ type frame struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		Groups:                   make([]*Group, 0),
+		groups:                   make([]*Group, 0),
 		connect:                  make(chan *Client),
 		disconnect:               make(chan *Client),
 		broadcastToGroup:         make(chan *frame),
@@ -107,9 +107,12 @@ func (hub *Hub) EstablishConnection(conn WsReadWriteCloser, groupId, connectionI
 	}
 
 	client := &Client{
-		GroupId:      groupId,
-		ConnectionId: connectionId,
-		connection:   conn,
+		OnMessage:      make(chan []byte),
+		OnError:        make(chan error),
+		LostConnection: make(chan error),
+		GroupId:        groupId,
+		ConnectionId:   connectionId,
+		connection:     conn,
 	}
 
 	hub.connect <- client
@@ -190,6 +193,14 @@ func (client *Client) ReadMessages(ctx context.Context) chan bool {
 	return finished
 }
 
+func (hub *Hub) Groups() []*Group {
+	return hub.groups
+}
+
+func (hub *Hub) Group(groupId string) *Group {
+	return hub.group(groupId)
+}
+
 func (hub *Hub) assignClientToGroup(client *Client) {
 	var group *Group
 
@@ -199,7 +210,7 @@ func (hub *Hub) assignClientToGroup(client *Client) {
 			Clients: make([]*Client, 0),
 		}
 
-		hub.Groups = append(hub.Groups, group)
+		hub.groups = append(hub.groups, group)
 	}
 
 	group.Clients = append(group.Clients, client)
@@ -249,7 +260,7 @@ func (hub *Hub) sendToGroup(groupId string, msg []byte) {
 }
 
 func (hub *Hub) sendToAllGroups(msg []byte) {
-	for _, group := range hub.Groups {
+	for _, group := range hub.groups {
 		go func(group *Group) {
 			for _, client := range group.Clients {
 				go func(client *Client) {
@@ -316,7 +327,7 @@ func (hub *Hub) client(groupId, connectionId string) *Client {
 }
 
 func (hub *Hub) group(groupId string) *Group {
-	for _, group := range hub.Groups {
+	for _, group := range hub.groups {
 		if group.Id == groupId {
 			return group
 		}
