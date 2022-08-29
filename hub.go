@@ -280,7 +280,7 @@ func (hub *Hub) sendToAllGroups(msg []byte) {
 
 func (hub *Hub) sendToConnection(groupId, connectionId string, msg []byte) {
 	if client := hub.client(groupId, connectionId); client != nil {
-		go func() {
+		go func(client *Client) {
 			if err := client.write(msg); err != nil {
 				if errBrokenPipe(err) {
 					logrus.Warnf("client [%v] will be disconnected from group [%v]", connectionId, groupId)
@@ -289,7 +289,7 @@ func (hub *Hub) sendToConnection(groupId, connectionId string, msg []byte) {
 
 				return
 			}
-		}()
+		}(client)
 	}
 }
 
