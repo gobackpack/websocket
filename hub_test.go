@@ -26,8 +26,8 @@ func TestNewHub(t *testing.T) {
 	hub := websocket.NewHub()
 
 	assert.NotNil(t, hub)
-	assert.NotNil(t, hub.groups)
-	assert.Equal(t, 0, len(hub.groups))
+	assert.NotNil(t, hub.Groups())
+	assert.Equal(t, 0, len(hub.Groups()))
 }
 
 func TestHub_EstablishConnection(t *testing.T) {
@@ -40,8 +40,8 @@ func TestHub_EstablishConnection(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 
-	assert.Equal(t, 1, len(hub.groups))
-	group := hub.groups[0]
+	assert.Equal(t, 1, len(hub.Groups()))
+	group := hub.Groups()[0]
 	assert.NotNil(t, group)
 	assert.Equal(t, "1", group.Id)
 
@@ -62,12 +62,7 @@ func BenchmarkHub_SendToGroup(b *testing.B) {
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			conn, err := websocket.NewGorillaConnectionAdapter(w, r)
-			if err != nil {
-				logrus.Errorf("failed to upgrade connection: %s", err)
-				return
-			}
-			_, err = hub.EstablishConnection(conn, "1", "1")
+			_, err := hub.EstablishGorillaWsConnection(w, r, "1", "1")
 			if err != nil {
 				logrus.Errorf("failed to establish connection with groupId -> %s", "1")
 				return
@@ -94,12 +89,7 @@ func BenchmarkHub_SendToAllGroups(b *testing.B) {
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			conn, err := websocket.NewGorillaConnectionAdapter(w, r)
-			if err != nil {
-				logrus.Errorf("failed to upgrade connection: %s", err)
-				return
-			}
-			_, err = hub.EstablishConnection(conn, "1", "1")
+			_, err := hub.EstablishGorillaWsConnection(w, r, "1", "1")
 			if err != nil {
 				b.Log(err)
 			}
@@ -123,12 +113,7 @@ func BenchmarkHub_SendToConnectionId(b *testing.B) {
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			conn, err := websocket.NewGorillaConnectionAdapter(w, r)
-			if err != nil {
-				logrus.Errorf("failed to upgrade connection: %s", err)
-				return
-			}
-			_, err = hub.EstablishConnection(conn, "1", "1")
+			_, err := hub.EstablishGorillaWsConnection(w, r, "1", "1")
 			if err != nil {
 				b.Log(err)
 			}
@@ -152,12 +137,7 @@ func BenchmarkHub_SendToOthersInGroup(b *testing.B) {
 
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			conn, err := websocket.NewGorillaConnectionAdapter(w, r)
-			if err != nil {
-				logrus.Errorf("failed to upgrade connection: %s", err)
-				return
-			}
-			_, err = hub.EstablishConnection(conn, "1", "1")
+			_, err := hub.EstablishGorillaWsConnection(w, r, "1", "1")
 			if err != nil {
 				b.Log(err)
 			}
@@ -182,12 +162,7 @@ func BenchmarkHub_EstablishConnection(b *testing.B) {
 	ts := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for n := 0; n < b.N; n++ {
-				conn, err := websocket.NewGorillaConnectionAdapter(w, r)
-				if err != nil {
-					logrus.Errorf("failed to upgrade connection: %s", err)
-					return
-				}
-				_, err = hub.EstablishConnection(conn, "1", "1")
+				_, err := hub.EstablishGorillaWsConnection(w, r, "1", "1")
 				if err != nil {
 					b.Log(err)
 				}
